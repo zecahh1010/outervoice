@@ -1,0 +1,11 @@
+.build-tools/
+OuterVoice/build/
+*.jks
+*.keystore
+*.idsig
+*signing-password*
+OuterVoice/dist/*.zip
+OuterVoice/dist/OuterVoice-1.0.0.apk
+OuterVoice/qa/recording-*.wav
+**/__pycache__/
+CarPiano-audio-extract/
