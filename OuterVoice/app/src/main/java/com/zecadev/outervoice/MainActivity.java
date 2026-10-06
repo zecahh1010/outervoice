@@ -22,6 +22,7 @@ import android.text.Spanned;
 import android.text.style.ForegroundColorSpan;
 import android.util.TypedValue;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.EditText;
@@ -46,16 +47,18 @@ public class MainActivity extends Activity {
     private final ArrayList<Sound> sounds = new ArrayList<>();
     private final ArrayList<TextView> rows = new ArrayList<>();
     private final ArrayList<View> bars = new ArrayList<>();
+    private ArrayList<Sound> editDraft;
+    private ScrollView editScroll;
     private Typeface icons;
     private Typeface bodyFont;
     private LiveMicPassthrough live;
     private WavPlayer player;
     private final WavRecorder recorder = new WavRecorder();
-    private boolean recordMode;
+    private boolean holdingMic;
     private File temporaryRecording;
     private int recordEpoch;
     private long recordMilliseconds;
-    private TextView tempPlay, addRecord, recordInfo;
+    private TextView addRecord, recordInfo;
     private File browseDirectory;
     private AudioManager audioManager;
     private AudioFocusRequest focus;
@@ -77,7 +80,8 @@ public class MainActivity extends Activity {
         }
     };
     private static final class Sound {
-        final String id, name;
+        final String id;
+        String name;
         Sound(String id, String name) { this.id = id; this.name = name; }
     }
 
@@ -167,6 +171,11 @@ public class MainActivity extends Activity {
     private void showHome() {
         page = "home"; rows.clear(); bars.clear(); lastHomeState = "";
         LinearLayout header = startPage("Outer Voice", false);
+        TextView floating = icon("\ue3e0", 30, TEAL);
+        floating.setContentDescription("Floating Buttons settings");
+        clickable(floating, Color.TRANSPARENT, 0, 8, false);
+        header.addView(floating, new LinearLayout.LayoutParams(px(48), px(48)));
+        floating.setOnClickListener(v -> { stopAudio(); startActivity(new Intent(this, FloatingButtonsActivity.class)); });
         TextView audioSettings = icon("\ue050", 30, TEAL);
         audioSettings.setContentDescription("Audio settings and diagnostics");
         clickable(audioSettings, Color.TRANSPARENT, 0, 8, false);
@@ -183,28 +192,34 @@ public class MainActivity extends Activity {
         LinearLayout left = column(); left.setGravity(Gravity.CENTER_HORIZONTAL);
         left.setPadding(px(24), px(22), px(24), px(22));
         body.addView(left, new LinearLayout.LayoutParams(px(352), -1));
-        LinearLayout modes = row();
-        TextView speakingMode = text("Live Speaking", 17, WHITE, true);
-        TextView recordingMode = text("Record & Play", 17, WHITE, true);
-        for (TextView mode : new TextView[]{speakingMode, recordingMode}) {
-            mode.setGravity(Gravity.CENTER); modes.addView(mode, new LinearLayout.LayoutParams(0, px(48), 1f));
-        }
-        clickable(speakingMode, !recordMode ? TEAL : SURFACE, 0, 8, false);
-        clickable(recordingMode, recordMode ? TEAL : SURFACE, 0, 8, false);
-        speakingMode.setOnClickListener(v -> switchMode(false)); recordingMode.setOnClickListener(v -> switchMode(true));
-        left.addView(modes, new LinearLayout.LayoutParams(-1, px(48))); space(left, 16);
+        TextView speakingMode = text("Live Speaking", 22, WHITE, true);
+        speakingMode.setGravity(Gravity.CENTER);
+        left.addView(speakingMode, new LinearLayout.LayoutParams(-1, px(48))); space(left, 16);
         micButton = icon("\ue029", 100, WHITE);
         clickable(micButton, SURFACE, TEAL, 0, true);
         left.addView(micButton, new LinearLayout.LayoutParams(px(160), px(160)));
-        micButton.setOnClickListener(v -> { if (recordMode) toggleRecording(false); else toggleMic(); });
+        micButton.setOnTouchListener((v, event) -> {
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    if (!recorder.active() && microphoneAllowed()) {
+                        player.stop(); playingId = "";
+                        holdingMic = true;
+                        toggleRecording(false);
+                        if (!recorder.active()) holdingMic = false;
+                    }
+                    return true;
+                case MotionEvent.ACTION_UP:
+                    if (holdingMic) { holdingMic = false; recorder.stop(); feedback = "Saving WAV…"; updateHome(); }
+                    return true;
+                case MotionEvent.ACTION_CANCEL:
+                    if (holdingMic) { stopAudio(); feedback = "Recording cancelled"; updateHome(); }
+                    return true;
+                default: return true;
+            }
+        });
         space(left, 6);
-        micLabel = text("Start Speaking", 25, WHITE, true); micLabel.setGravity(Gravity.CENTER);
+        micLabel = text("Hold to Speak", 25, WHITE, true); micLabel.setGravity(Gravity.CENTER);
         left.addView(micLabel, new LinearLayout.LayoutParams(-1, px(45)));
-        space(left, 5);
-        tempPlay = button("Play", false);
-        tempPlay.setVisibility(recordMode ? View.VISIBLE : View.GONE);
-        left.addView(tempPlay, new LinearLayout.LayoutParams(-1, px(44)));
-        tempPlay.setOnClickListener(v -> { if (temporaryRecording != null) playFile(temporaryRecording, "temporary"); });
         space(left, 5);
         LinearLayout meter = row(); meter.setGravity(Gravity.CENTER);
         for (int i = 0; i < 11; i++) {
@@ -221,6 +236,10 @@ public class MainActivity extends Activity {
         body.addView(right, new LinearLayout.LayoutParams(0, -1, 1f));
         LinearLayout listHeader = row();
         listHeader.addView(text("Saved sounds", 28, WHITE, true), new LinearLayout.LayoutParams(0, px(52), 1f));
+        TextView edit = button("Edit List", false);
+        LinearLayout.LayoutParams editSize = new LinearLayout.LayoutParams(px(132), px(48)); editSize.rightMargin = px(12);
+        listHeader.addView(edit, editSize);
+        edit.setOnClickListener(v -> { stopAudio(); showEditList(); });
         TextView add = button("+ Add Sound", true);
         listHeader.addView(add, new LinearLayout.LayoutParams(px(184), px(48)));
         add.setOnClickListener(v -> { stopAudio(); showAdd(); });
@@ -241,11 +260,6 @@ public class MainActivity extends Activity {
             TextView label = text(sound.name, 24, WHITE, true);
             label.setPadding(px(30), 0, 0, 0); label.setMaxLines(2);
             line.addView(label, new LinearLayout.LayoutParams(0, -1, 1f));
-            TextView remove = icon("\ue872", 28, MUTED);
-            remove.setContentDescription("Remove " + sound.name);
-            clickable(remove, Color.TRANSPARENT, 0, 8, false);
-            line.addView(remove, new LinearLayout.LayoutParams(px(52), px(60)));
-            remove.setOnClickListener(v -> removeSound(sound));
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, px(86)); params.bottomMargin = px(10);
             entries.addView(line, params); rows.add(label);
             line.setContentDescription("Play " + sound.name); line.setOnClickListener(v -> playSound(sound));
@@ -258,18 +272,13 @@ public class MainActivity extends Activity {
         boolean speaking = live.isActive(), playing = player.active(), recording = recorder.active();
         boolean available = AudioRoutes.outer(this) != null;
         int lit = (speaking || recording) ? Math.min(11, (int) Math.round(level * 66)) : 0;
-        String state = recordMode + "|" + (temporaryRecording != null) + "|" + recording + "|" + recordMilliseconds / 1000 + "|" + speaking + "|" + playing + "|" + available + "|" + playingId + "|" + feedback + "|" + lit;
+        String state = holdingMic + "|" + (temporaryRecording != null) + "|" + recording + "|" + recordMilliseconds / 1000 + "|" + speaking + "|" + playing + "|" + available + "|" + playingId + "|" + feedback + "|" + lit;
         if (state.equals(lastHomeState)) return;
         lastHomeState = state;
-        String labelText = recordMode ? (recording ? "Stop Recording" : "Start Recording") : (speaking ? "Stop Speaking" : "Start Speaking");
+        String labelText = recording ? (holdingMic ? "Release to Play" : "Saving WAV…") : "Hold to Speak";
         micLabel.setText(labelText); micButton.setContentDescription(labelText);
-        if (recordMode) {
-            tempPlay.setText(playing && "temporary".equals(playingId) ? "Stop" : "Play");
-            tempPlay.setEnabled(temporaryRecording != null && !recording && !speaking);
-            tempPlay.setAlpha(tempPlay.isEnabled() ? 1f : .4f);
-        }
         clickable(micButton, (speaking || recording) ? TEAL : SURFACE, TEAL, 0, true);
-        micStatus.setText(!feedback.isEmpty() ? feedback : recording ? "Recording " + recordMilliseconds / 1000 + "s / 180s" : speaking ? "Speaking now" : playing ? "Playing sound…" : recordMode ? (temporaryRecording == null ? "Record a temporary clip" : "Clip ready • temporary") : "Ready to speak");
+        micStatus.setText(!feedback.isEmpty() ? feedback : recording ? "Recording " + recordMilliseconds / 1000 + "s / 180s" : speaking ? "Speaking now" : playing ? "Playing sound…" : "Hold to record • release to play");
         routeStatus.setText(available ? "Outer speaker" : "Speaker unavailable");
         routeStatus.setTextColor(available ? WHITE : MUTED);
         for (int i = 0; i < bars.size(); i++) bars.get(i).setBackground(shape(i < lit ? TEAL : LINE, 0, 4, false));
@@ -284,22 +293,15 @@ public class MainActivity extends Activity {
     }
     private boolean acquireFocus() {
         if (hasFocus) return true;
+        AudioOwner.claim(this, this::stopAudio);
         hasFocus = audioManager != null && audioManager.requestAudioFocus(focus) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
+        if (!hasFocus) AudioOwner.release(this);
         if (!hasFocus) toast("Audio is busy; try again"); return hasFocus;
     }
     private void abandonFocus() {
         if (hasFocus && audioManager != null) audioManager.abandonAudioFocusRequest(focus);
         hasFocus = false;
-    }
-    private void toggleMic() {
-        if (live.isActive()) { live.stop(); feedback = "Stopping…"; updateHome(); return; }
-        if (player.active() || recorder.active()) { toast("Stop the current audio first"); return; }
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, MIC_REQUEST); return;
-        }
-        if (!acquireFocus()) return;
-        try { feedback = ""; live.start(); } catch (RuntimeException e) { abandonFocus(); feedback = e.getMessage(); AudioDiagnostics.log(feedback); toast(feedback); }
-        updateHome();
+        AudioOwner.release(this);
     }
     private void playSound(Sound sound) { playFile(new File(getFilesDir(), sound.id + ".wav"), sound.id); }
     private void playFile(File file, String id) {
@@ -315,7 +317,7 @@ public class MainActivity extends Activity {
         updateHome();
     }
     private void stopAudio() {
-        live.stop(); player.stop(); recorder.cancel(); recordEpoch++; abandonFocus(); level = 0;
+        holdingMic = false; live.stop(); player.stop(); recorder.cancel(); recordEpoch++; abandonFocus(); level = 0;
         if ("add".equals(page) && addRecord != null) {
             addRecord.setText("Record microphone"); saveButton.setEnabled(!importing); saveButton.setAlpha(importing ? .4f : 1f);
             recordInfo.setText("44.1 kHz mono PCM16 • up to 180 seconds");
@@ -324,10 +326,6 @@ public class MainActivity extends Activity {
     private boolean microphoneAllowed() {
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) return true;
         requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, MIC_REQUEST); return false;
-    }
-    private void switchMode(boolean next) {
-        if (recordMode == next) return;
-        stopAudio(); deleteTemporary(); recordMode = next; feedback = ""; showHome();
     }
     private void deleteTemporary() { if (temporaryRecording != null) temporaryRecording.delete(); temporaryRecording = null; }
     private void cleanupTemporary() {
@@ -356,25 +354,98 @@ public class MainActivity extends Activity {
                     addRecord.setText("Record microphone"); saveButton.setEnabled(true); saveButton.setAlpha(1f);
                     recordInfo.setText(error != null ? error : completed == null ? "Recording cancelled" : "Recorded " + recordMilliseconds / 1000 + "s • 44.1 kHz mono PCM16");
                     if (completed != null) { if (pendingFile != null) pendingFile.delete(); pendingFile = completed; importLabel.setText("Microphone recording.wav"); }
-                } else if (completed != null) temporaryRecording = completed;
+                } else if (completed != null) {
+                    holdingMic = false;
+                    temporaryRecording = completed;
+                    playFile(completed, "temporary");
+                } else holdingMic = false;
                 updateHome();
             }); }
         });
         if (forSound) { addRecord.setText("Stop Recording"); saveButton.setEnabled(false); saveButton.setAlpha(.4f); }
         updateHome();
     }
-    private void removeSound(Sound sound) {
-        new AlertDialog.Builder(this).setTitle("Remove sound?").setMessage(sound.name)
-            .setNegativeButton("Cancel", null).setPositiveButton("Remove", (dialog, which) -> {
-                stopAudio(); int index = sounds.indexOf(sound); sounds.remove(sound);
-                if (!persistSounds()) { sounds.add(index, sound); toast("Could not remove sound"); return; }
-                new File(getFilesDir(), sound.id + ".wav").delete(); showHome();
-            }).show();
+    private void showEditList() {
+        int scrollY = "edit".equals(page) && editScroll != null ? editScroll.getScrollY() : 0;
+        if (editDraft == null) {
+            editDraft = new ArrayList<>();
+            for (Sound sound : sounds) editDraft.add(new Sound(sound.id, sound.name));
+        }
+        page = "edit";
+        // Keep the editing controls clear of the overlay; saved enable state is retained.
+        stopService(new Intent(this, FloatingPanelService.class));
+        startPage("Edit Saved Sounds", true);
+        LinearLayout content = column(); content.setPadding(px(28), px(14), px(28), px(20));
+        root.addView(content, new LinearLayout.LayoutParams(-1, 0, 1f));
+        content.addView(text("Rename, reorder or delete sounds. Changes apply when you Save Changes.", 19, MUTED, false),
+            new LinearLayout.LayoutParams(-1, px(40)));
+        ScrollView scroll = new ScrollView(this); scroll.setScrollbarFadingEnabled(false);
+        editScroll = scroll;
+        content.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1f));
+        LinearLayout entries = column(); scroll.addView(entries);
+        if (editDraft.isEmpty()) entries.addView(text("No saved sounds in this list.", 22, MUTED, false), new LinearLayout.LayoutParams(-1, px(100)));
+        for (int i = 0; i < editDraft.size(); i++) {
+            Sound sound = editDraft.get(i);
+            LinearLayout line = row(); line.setPadding(px(16), 0, px(12), 0); line.setBackground(shape(SURFACE, LINE, 10, false));
+            LinearLayout.LayoutParams lineSize = new LinearLayout.LayoutParams(-1, px(76)); lineSize.bottomMargin = px(10); entries.addView(line, lineSize);
+            line.addView(text(String.valueOf(i + 1), 20, MUTED, true), new LinearLayout.LayoutParams(px(36), -1));
+            TextView name = text(sound.name, 23, WHITE, true); name.setMaxLines(2);
+            line.addView(name, new LinearLayout.LayoutParams(0, -1, 1f));
+            for (int direction : new int[]{-1, 1}) {
+                TextView arrow = icon(direction < 0 ? "\ue5d8" : "\ue5db", 30, WHITE);
+                arrow.setContentDescription((direction < 0 ? "Move up " : "Move down ") + sound.name);
+                clickable(arrow, Color.TRANSPARENT, 0, 8, false);
+                arrow.setEnabled(i + direction >= 0 && i + direction < editDraft.size()); arrow.setAlpha(arrow.isEnabled() ? 1f : .3f);
+                line.addView(arrow, new LinearLayout.LayoutParams(px(52), px(56)));
+                arrow.setOnClickListener(v -> {
+                    int index = editDraft.indexOf(sound), next = index + direction;
+                    if (next >= 0 && next < editDraft.size()) { java.util.Collections.swap(editDraft, index, next); showEditList(); }
+                });
+            }
+            TextView rename = button("Rename", false), delete = button("Delete", false);
+            rename.setContentDescription("Rename " + sound.name); delete.setContentDescription("Delete " + sound.name);
+            delete.setTextColor(0xfff49a97);
+            line.addView(rename, new LinearLayout.LayoutParams(px(132), px(50)));
+            LinearLayout.LayoutParams deleteSize = new LinearLayout.LayoutParams(px(116), px(50)); deleteSize.leftMargin = px(12); line.addView(delete, deleteSize);
+            rename.setOnClickListener(v -> renameDraft(sound));
+            delete.setOnClickListener(v -> new AlertDialog.Builder(this).setTitle("Delete saved sound?")
+                .setMessage("Remove \"" + sound.name + "\" from this list? The sound is permanently deleted only after Save Changes.")
+                .setNegativeButton("Cancel", null).setPositiveButton("Delete", (dialog, which) -> { editDraft.remove(sound); showEditList(); }).show());
+        }
+        LinearLayout actions = row(); actions.setGravity(Gravity.RIGHT); space(content, 12);
+        TextView cancel = button("Cancel", false), save = button("Save Changes", true);
+        actions.addView(cancel, new LinearLayout.LayoutParams(px(180), px(60)));
+        LinearLayout.LayoutParams saveSize = new LinearLayout.LayoutParams(px(240), px(60)); saveSize.leftMargin = px(16); actions.addView(save, saveSize);
+        content.addView(actions); cancel.setOnClickListener(v -> cancelAdd()); save.setOnClickListener(v -> saveEditList());
+        scroll.post(() -> scroll.scrollTo(0, scrollY));
+    }
+    private void renameDraft(Sound sound) {
+        EditText input = new EditText(this); input.setSingleLine(true); input.setText(sound.name); input.selectAll();
+        input.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(60)});
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Rename sound").setView(input)
+            .setNegativeButton("Cancel", null).setPositiveButton("Rename", null).create();
+        dialog.setOnShowListener(unused -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            String name = input.getText().toString().trim();
+            if (name.isEmpty()) { input.setError("Enter a sound name"); return; }
+            sound.name = name; dialog.dismiss(); showEditList();
+        }));
+        dialog.show();
+    }
+    private void saveEditList() {
+        if (editDraft == null) return;
+        ArrayList<Sound> previous = new ArrayList<>(sounds);
+        sounds.clear(); sounds.addAll(editDraft);
+        if (!persistSounds()) { sounds.clear(); sounds.addAll(previous); toast("Could not save changes"); return; }
+        for (Sound old : previous) {
+            boolean retained = false; for (Sound current : sounds) if (current.id.equals(old.id)) { retained = true; break; }
+            if (!retained) new File(getFilesDir(), old.id + ".wav").delete();
+        }
+        editDraft = null; showHome();
     }
     @Override public void onRequestPermissionsResult(int request, String[] permissions, int[] result) {
         super.onRequestPermissionsResult(request, permissions, result);
         boolean granted = result.length > 0 && result[0] == PackageManager.PERMISSION_GRANTED;
-        if (request == MIC_REQUEST) toast(granted ? "Microphone allowed. Tap again to start." : "Microphone permission is required");
+        if (request == MIC_REQUEST) toast(granted ? "Microphone allowed. Hold the button to speak." : "Microphone permission is required");
         if (request == STORAGE_REQUEST) { if (granted) browseFiles(null); else toast("File access denied. You can still record a sound."); }
     }
 
@@ -415,7 +486,7 @@ public class MainActivity extends Activity {
         browse.setOnClickListener(v -> browseFiles(null)); form.addView(browse, new LinearLayout.LayoutParams(-1, px(40)));
         form.addView(new View(this), new LinearLayout.LayoutParams(1, 0, 1f));
         LinearLayout actions = row(); actions.setGravity(Gravity.RIGHT);
-        TextView cancel = button("Cancel", false); saveButton = button("Save", true);
+        TextView cancel = button("Cancel", false); saveButton = button("Add Sound", true);
         actions.addView(cancel, new LinearLayout.LayoutParams(px(238), px(74)));
         LinearLayout.LayoutParams saveParams = new LinearLayout.LayoutParams(px(224), px(74)); saveParams.leftMargin = px(20);
         actions.addView(saveButton, saveParams); form.addView(actions);
@@ -468,9 +539,11 @@ public class MainActivity extends Activity {
         pendingFile = null; showHome();
     }
     private void cancelAdd() {
+        editDraft = null;
         stopAudio(); importEpoch++; importing = false;
         if (pendingFile != null) pendingFile.delete(); pendingFile = null;
         showHome();
+        FloatingPanelService.sync(this, false);
     }
     private SharedPreferences preferences() { return getSharedPreferences("sounds", MODE_PRIVATE); }
     private void loadSounds() {
@@ -488,7 +561,9 @@ public class MainActivity extends Activity {
         JSONArray array = new JSONArray();
         try {
             for (Sound sound : sounds) { JSONObject item = new JSONObject(); item.put("id", sound.id); item.put("name", sound.name); array.put(item); }
-            return preferences().edit().putString("items", array.toString()).commit();
+            boolean stored = preferences().edit().putString("items", array.toString()).commit();
+            if (stored) FloatingPanelService.sync(this, true);
+            return stored;
         } catch (Exception e) { return false; }
     }
     private void showCredits() {
@@ -596,15 +671,6 @@ public class MainActivity extends Activity {
                 volumeLabel.setText("System media volume: " + audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) + "/" + v.getMax());
             }
         });
-        int initialGain = preferences().getInt("mic_gain", 100);
-        TextView gainLabel = text("Live microphone level: " + initialGain + "%", 20, WHITE, true); panel.addView(gainLabel);
-        android.widget.SeekBar gain = new android.widget.SeekBar(this); gain.setMax(100); gain.setProgress(initialGain);
-        panel.addView(gain, new LinearLayout.LayoutParams(-1, px(44)));
-        gain.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
-            public void onStartTrackingTouch(android.widget.SeekBar v) { }
-            public void onStopTrackingTouch(android.widget.SeekBar v) { preferences().edit().putInt("mic_gain", v.getProgress()).apply(); }
-            public void onProgressChanged(android.widget.SeekBar v, int value, boolean user) { live.setGain(value / 100f); gainLabel.setText("Live microphone level: " + value + "%"); }
-        });
         TextView note = text("BUS12 only • firmware controls amplifier volume\nWAVs use peak normalization (up to ×16).", 17, MUTED, false);
         panel.addView(note, new LinearLayout.LayoutParams(-1, px(60)));
         LinearLayout actions = row();
@@ -629,7 +695,7 @@ public class MainActivity extends Activity {
     }
     private void toast(String message) { Toast.makeText(this, message == null ? "Operation failed" : message, Toast.LENGTH_LONG).show(); }
     @Override public void onBackPressed() { if (!"home".equals(page)) cancelAdd(); else { stopAudio(); super.onBackPressed(); } }
-    @Override protected void onResume() { super.onResume(); paused = false; main.removeCallbacks(refresh); main.post(refresh); }
+    @Override protected void onResume() { super.onResume(); paused = false; main.removeCallbacks(refresh); main.post(refresh); if (!"edit".equals(page)) FloatingPanelService.sync(this, false); }
     @Override protected void onPause() { paused = true; main.removeCallbacks(refresh); if (live != null) { stopAudio(); deleteTemporary(); if ("add".equals(page) && addRecord != null) { addRecord.setText("Record microphone"); saveButton.setEnabled(!importing); saveButton.setAlpha(importing ? .4f : 1f); recordInfo.setText("44.1 kHz mono PCM16 • up to 180 seconds"); } } super.onPause(); }
     @Override protected void onDestroy() { importEpoch++; if (live != null) stopAudio(); deleteTemporary(); main.removeCallbacksAndMessages(null); if (pendingFile != null) pendingFile.delete(); super.onDestroy(); }
 }

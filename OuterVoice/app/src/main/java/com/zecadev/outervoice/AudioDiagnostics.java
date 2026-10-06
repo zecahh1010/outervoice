@@ -11,6 +11,7 @@ import java.util.Locale;
 final class AudioDiagnostics {
     private static final StringBuilder events = new StringBuilder();
     static synchronized void log(String message) {
+        android.util.Log.i("OuterVoice", message);
         events.append(new SimpleDateFormat("HH:mm:ss", Locale.US).format(new Date())).append(" ").append(message).append('\n');
         if (events.length() > 16000) events.delete(0, events.length() - 12000);
     }
