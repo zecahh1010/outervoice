@@ -119,38 +119,46 @@ public final class FloatingPanelService extends Service {
         if (circle) drawable.setShape(GradientDrawable.OVAL); else drawable.setCornerRadius(16);
         return drawable;
     }
-    private LinearLayout circle(String symbol, String label, int color, String description) {
+    private LinearLayout circle(String symbol, String label, int color, String description, int diameter, int largest) {
         LinearLayout column = new LinearLayout(this); column.setOrientation(LinearLayout.VERTICAL); column.setGravity(Gravity.CENTER);
-        int iconSize = Math.max(26, size * 45 / 100);
-        if (FloatingConfig.MIC_ICON.equals(symbol)) iconSize = Math.round(iconSize * (1 + micEnlargement / 100f));
+        int iconSize = Math.round(diameter * .45f);
         TextView button = text(symbol, iconSize, color == FloatingConfig.TEAL ? 0xfff6f9fa : 0xff0f171c);
         button.setIncludeFontPadding(false);
         button.setTypeface(icons); button.setBackground(shape(color, true)); button.setContentDescription(description);
         button.setClickable(true); button.setFocusable(true);
-        column.addView(button, new LinearLayout.LayoutParams(size, size));
+        column.addView(button, new LinearLayout.LayoutParams(diameter, diameter));
+        LinearLayout.LayoutParams buttonPosition = (LinearLayout.LayoutParams)button.getLayoutParams();
+        buttonPosition.topMargin = (largest - diameter) / 2;
         TextView name = text(label, Math.max(12, Math.min(17, size / 6)), 0xfff6f9fa); name.setMaxLines(2);
-        column.addView(name, new LinearLayout.LayoutParams(size + 8, 34));
+        LinearLayout.LayoutParams namePosition = new LinearLayout.LayoutParams(diameter, 34);
+        namePosition.topMargin = (largest - diameter) / 2;
+        column.addView(name, namePosition);
         return column;
     }
     private void buildPanel() {
         if (panel != null) { windows.removeView(panel); panel = null; }
+        mic = null; status = null;
         FloatingConfig config = FloatingConfig.load(this); size = config.size; micEnlargement = config.micEnlargement;
-        DisplayMetrics metrics = new DisplayMetrics(); windows.getDefaultDisplay().getMetrics(metrics);
+        DisplayMetrics metrics = new DisplayMetrics(); windows.getDefaultDisplay().getRealMetrics(metrics);
         screenW = metrics.widthPixels; screenH = metrics.heightPixels;
+        if (FloatingConfig.prefs(this).getBoolean("minimized", false)) { buildBubble(); return; }
+        int largest = config.diameter(true);
         LinearLayout content = new LinearLayout(this); content.setOrientation(LinearLayout.VERTICAL);
         content.setPadding(8, 8, 8, 6); content.setBackground(shape(0xff182329, false));
         LinearLayout buttons = row(); content.addView(buttons);
         TextView grip = text("\ue25d", 26, 0xffaebcc7); grip.setTypeface(icons); grip.setContentDescription("Move floating panel");
-        buttons.addView(grip, new LinearLayout.LayoutParams(36, size + 34));
-        int count = 0; for (FloatingConfig.Item item : config.items) if (item.selected) count++;
-        int fixedWidth = 16 + 36 + 40;
-        int soundWidth = Math.min(count * (size + 12) - 4, Math.max(0, screenW - 16 - fixedWidth));
+        buttons.addView(grip, new LinearLayout.LayoutParams(36, largest + 34));
+        int count = 0, total = 0;
+        for (FloatingConfig.Item item : config.items) if (item.selected) { if (count++ > 0) total += config.spacing; total += config.diameter(item.isLive()); }
+        int fixedWidth = 16 + 36 + 88;
+        int soundWidth = Math.min(total, Math.max(0, screenW - 16 - fixedWidth));
         if (count > 0) {
-            HorizontalScrollView scroll = new HorizontalScrollView(this); scroll.setHorizontalScrollBarEnabled(count * (size + 12) - 4 > soundWidth);
+            HorizontalScrollView scroll = new HorizontalScrollView(this); scroll.setHorizontalScrollBarEnabled(total > soundWidth);
             LinearLayout saved = row(); scroll.addView(saved);
             for (FloatingConfig.Item item : config.items) if (item.selected) {
-                LinearLayout sound = circle(item.glyph(), item.name, item.buttonColor(), item.isLive() ? "Hold Live Speak to record; release to play" : "Play " + item.name);
-                LinearLayout.LayoutParams layout = new LinearLayout.LayoutParams(size + 8, size + 34); layout.leftMargin = saved.getChildCount() > 0 ? 4 : 0;
+                int diameter = config.diameter(item.isLive());
+                LinearLayout sound = circle(item.glyph(), item.name, item.buttonColor(), item.isLive() ? "Hold Live Speak to record; release to play" : "Play " + item.name, diameter, largest);
+                LinearLayout.LayoutParams layout = new LinearLayout.LayoutParams(diameter, largest + 34); layout.leftMargin = saved.getChildCount() > 0 ? config.spacing : 0;
                 saved.addView(sound, layout);
                 if (item.isLive()) {
                     mic = (TextView) sound.getChildAt(0);
@@ -169,15 +177,18 @@ public final class FloatingPanelService extends Service {
                     });
                 } else sound.getChildAt(0).setOnClickListener(v -> playSound(item));
             }
-            buttons.addView(scroll, new LinearLayout.LayoutParams(soundWidth, size + 34));
+            buttons.addView(scroll, new LinearLayout.LayoutParams(soundWidth, largest + 34));
         }
+        TextView minimize = text("\ue15b", 26, 0xfff6f9fa); minimize.setTypeface(icons); minimize.setContentDescription("Minimize floating panel");
+        minimize.setOnClickListener(v -> { cancelAudio(); FloatingConfig.prefs(this).edit().putBoolean("minimized", true).commit(); buildPanel(); });
+        buttons.addView(minimize, new LinearLayout.LayoutParams(44, 48));
         TextView close = text("\ue5cd", 26, 0xfff6f9fa); close.setTypeface(icons); close.setContentDescription("Close floating panel");
-        close.setOnClickListener(v -> closePanel()); buttons.addView(close, new LinearLayout.LayoutParams(40, 48));
+        close.setOnClickListener(v -> closePanel()); buttons.addView(close, new LinearLayout.LayoutParams(44, 48));
         status = text("Hold Live Speak; release to play", 12, 0xffaebcc7); status.setMaxLines(1);
         content.addView(status, new LinearLayout.LayoutParams(-1, 20));
         panel = content;
-        params = new WindowManager.LayoutParams(fixedWidth + soundWidth, size + 68,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE, PixelFormat.TRANSLUCENT);
+        params = new WindowManager.LayoutParams(fixedWidth + soundWidth, largest + 68,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN, PixelFormat.TRANSLUCENT);
         params.gravity = Gravity.TOP | Gravity.LEFT;
         // Android 12 permits touches outside a translucent overlay at this opacity.
         params.alpha = .8f;
@@ -196,6 +207,37 @@ public final class FloatingPanelService extends Service {
                     case MotionEvent.ACTION_UP:
                     case MotionEvent.ACTION_CANCEL:
                         FloatingConfig.prefs(FloatingPanelService.this).edit().putInt("x", params.x).putInt("y", params.y).apply(); return true;
+                    default: return true;
+                }
+            }
+        });
+    }
+    private void buildBubble() {
+        TextView bubble = text(FloatingConfig.MIC_ICON, 30, 0xfff6f9fa); bubble.setTypeface(icons);
+        bubble.setIncludeFontPadding(false); bubble.setBackground(shape(FloatingConfig.TEAL, true));
+        bubble.setContentDescription("Reopen floating panel; drag to move"); bubble.setClickable(true);
+        panel = bubble;
+        params = new WindowManager.LayoutParams(60, 60, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN, PixelFormat.TRANSLUCENT);
+        params.gravity = Gravity.TOP | Gravity.LEFT; params.alpha = .8f;
+        params.x = FloatingConfig.prefs(this).getInt("bubble_x", FloatingConfig.prefs(this).getInt("x", 24));
+        params.y = FloatingConfig.prefs(this).getInt("bubble_y", FloatingConfig.prefs(this).getInt("y", 24));
+        clamp(); windows.addView(panel, params);
+        bubble.setOnClickListener(v -> { FloatingConfig.prefs(this).edit().putBoolean("minimized", false).commit(); buildPanel(); });
+        bubble.setOnTouchListener(new View.OnTouchListener() {
+            float x, y; int startX, startY; boolean moved;
+            public boolean onTouch(View view, MotionEvent event) {
+                switch (event.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN: x = event.getRawX(); y = event.getRawY(); startX = params.x; startY = params.y; moved = false; return true;
+                    case MotionEvent.ACTION_MOVE:
+                        if (Math.abs(event.getRawX() - x) > 8 || Math.abs(event.getRawY() - y) > 8) moved = true;
+                        if (moved) { params.x = startX + Math.round(event.getRawX() - x); params.y = startY + Math.round(event.getRawY() - y); clamp(); windows.updateViewLayout(panel, params); }
+                        return true;
+                    case MotionEvent.ACTION_UP:
+                        if (!moved) view.performClick();
+                        else FloatingConfig.prefs(FloatingPanelService.this).edit().putInt("bubble_x", params.x).putInt("bubble_y", params.y).apply();
+                        return true;
+                    case MotionEvent.ACTION_CANCEL: return true;
                     default: return true;
                 }
             }
@@ -272,7 +314,7 @@ public final class FloatingPanelService extends Service {
     }
     private void show(String message) { if (status != null) status.setText(message == null ? "Audio failed" : message); }
     private void closePanel() {
-        FloatingConfig.prefs(this).edit().putBoolean("enabled", false).apply(); stopSelf();
+        FloatingConfig.prefs(this).edit().putBoolean("enabled", false).putBoolean("minimized", false).apply(); stopSelf();
     }
     @Override public void onConfigurationChanged(android.content.res.Configuration config) {
         super.onConfigurationChanged(config); cancelAudio(); buildPanel();

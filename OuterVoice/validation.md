@@ -72,3 +72,16 @@ These checks use the local Android 9 emulator, not the vehicle. Audible BUS12 ou
 - Empty and out-of-range percentage values block saving. Actual overlay glyph heights are 30px at 0% and 46px at 50%; 100% is approximately twice the baseline. Circle geometry and saved-sound pixels remain unchanged.
 - 100% and position persist after restart. Final configuration restores 50% with Live Speak in third position. Holding/releasing it above Android Settings finalizes a 44.1kHz mono PCM16 WAV, requests BUS12 playback, and cleans the temporary clip. No AndroidRuntime crash was reported.
 - Audible BUS12 output still requires the vehicle; emulator verifies recording and routing requests only.
+
+## v1.3.0 — larger Live Speak, minimize and broad imports (2026-10-08)
+
+- Pure Java WAV and PCM import tests pass: PCM8/16/24/32, float32/64, downmixing, resampling/amplitude, cancellation cleanup, malformed/truncated inputs. Native compilation, alignment and APK signing pass using the existing certificate (versionCode7).
+- Android9 system-window and screenshot checks confirm the whole Live Speak circle is132px at an88px base and50% enlargement. Other circles remain88px. Edge spacing matches12px. At144px base,100% enlargement and zero gaps, Live Speak is288px with proportional icons and no clipping.
+- Minimize produces a60px draggable bubble while retaining enabled state. Dragging the bubble does not record; tapping restores the original full-panel frame. Values persist across restart. Hold/release after resizing finalizes PCM16 WAV and requests BUS12 playback.
+- Exit disables the overlay, stops its service and closes the app task.
+- UI inspection retries transient Android null-root responses and rejects stale snapshots. The Play label now updates only when its state changes, avoiding continuous accessibility events.
+- Audio import matrix passes PCM8/24/float WAV, MP3, AAC/M4A, FLAC, OGG, a245-second WAV over20MB, and MP3 content with a.bin extension. Converted headers/duration and enabled Play controls are verified; previews request BUS12. Damaged audio reports an error and disables Play. All five original saved sounds remain unchanged; canceled drafts remove pending/source files; no AndroidRuntime crash is reported. Audible BUS12 playback and device-specific codecs still require the head unit.
+- The AAC duration regression revealed Android9 extractor metadata with encoder-delay45158 for a2-second LC-AAC fixture. Import disables decoder gapless trimming to avoid losing audio; codec priming/padding is retained. Decoder source/output formats are recorded in diagnostics.
+- Replacing an imported clip clears the previous pending clip first, so a failed replacement cannot leave Play targeting stale audio.
+- The final UI check verifies visible settings helper text, the home touch/ripple and Exit controls, and minimized-state restart/reopen across status-bar and fullscreen screens. Overlay windows use absolute screen coordinates to avoid24px inset shifts.
+- Failed replacement after a successful MP3 import is tested: stale pending audio is removed and Play becomes disabled. The draft cancels cleanly. Final48px percentage input and preview label padding are checked in the rebuilt APK.

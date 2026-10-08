@@ -22,6 +22,8 @@ final class FloatingConfig {
     boolean enabled;
     int size = DEFAULT_SIZE;
     int micEnlargement = DEFAULT_MIC_ENLARGEMENT;
+    int spacing = 12;
+    int diameter(boolean live) { return live ? Math.round(size * (1 + micEnlargement / 100f)) : size; }
     final ArrayList<Item> items = new ArrayList<>();
     static final class Item {
         final String id, name;
@@ -40,6 +42,7 @@ final class FloatingConfig {
         SharedPreferences prefs = prefs(context);
         config.enabled = prefs.getBoolean("enabled", false);
         config.size = Math.max(MIN_SIZE, Math.min(MAX_SIZE, prefs.getInt("size", DEFAULT_SIZE)));
+        config.spacing = Math.max(0, Math.min(40, prefs.getInt("spacing", 12)));
         config.micEnlargement = Math.max(0, Math.min(MAX_MIC_ENLARGEMENT, prefs.getInt("mic_enlargement", DEFAULT_MIC_ENLARGEMENT)));
         ArrayList<Item> available = new ArrayList<>();
         Item live = new Item(LIVE_ID, "Live Speak"); live.selected = true;
@@ -83,6 +86,7 @@ final class FloatingConfig {
             }
             return prefs(context).edit().putBoolean("enabled", enabled).putInt("size", size)
                 .putInt("mic_enlargement", micEnlargement)
+                .putInt("spacing", spacing)
                 .putString("items", array.toString()).commit();
         } catch (Exception e) { return false; }
     }

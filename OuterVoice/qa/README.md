@@ -21,3 +21,11 @@ The overlay is non-focusable, so Android 9 UIAutomator dumps usually contain the
 ## v1.2.2 Live Speak ordering and icon size
 
 `check-v122.py` recreates legacy floating preferences on emulator-5554, checks migration to the 50% default, reorders Live Speak among saved sounds, and verifies its fixed microphone icon. It checks invalid and blank percentage rejection, compares actual overlay pixels at 0%, 50% and 100% with unchanged circle geometry and saved-sound pixels, verifies persistence, and holds/releases Live Speak in third position above Android Settings. BUS12 is absent in this emulator.
+
+## v1.3.0 sizing, minimize and audio import
+
+`check-v130.py` upgrades emulator-5554, checks actual Live Speak circle dimensions, edge spacing, proportional icons at maximum base size, persisted settings, minimize/drag/reopen and Exit. It generates disposable audio using portable FFmpeg in the ignored .build-tools folder and imports PCM8/24/float WAV, MP3, AAC/M4A, FLAC, OGG, a WAV exceeding20MB, and MP3 with a nonstandard extension. It verifies converted WAV parameters/duration, Play availability and BUS12 preview requests, damaged-file rejection, draft cleanup and unchanged original saved sounds. Audible BUS12 output needs the head unit.
+
+Set OV_QA_PHASE=import to repeat only import checks; OV_QA_CASES can name a comma-separated subset. The script rejects stale UIAutomator snapshots. Fixture audio stays outside source/release assets.
+
+`check-v130-final-ui.py` checks the final settings helper text and home controls, restarts while minimized across status-bar/fullscreen screens, restores the original full-panel position, and verifies a failed replacement removes the stale preview and disables Play.

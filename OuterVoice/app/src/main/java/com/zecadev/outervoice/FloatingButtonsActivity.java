@@ -85,6 +85,7 @@ public final class FloatingButtonsActivity extends Activity {
                 config.items.clear(); config.items.addAll(ordered);
                 config.enabled = state.getBoolean("enabled"); config.size = state.getInt("size", 88);
                 config.micEnlargement = state.getInt("micEnlargement", 50);
+                config.spacing = state.getInt("spacing", 12);
                 micPercentDraft = state.getString("micPercentDraft", String.valueOf(config.micEnlargement));
                 requestingOverlay = state.getBoolean("requestingOverlay");
                 for (FloatingConfig.Item item : config.items) if (item.id.equals(state.getString("editing"))) editing = item;
@@ -120,6 +121,19 @@ public final class FloatingButtonsActivity extends Activity {
                 config.size = FloatingConfig.MIN_SIZE + value * 4; sizeValue.setText(config.size + " px"); buildPreview();
             }
         }); root.addView(settings, new LinearLayout.LayoutParams(-1, px(60)));
+        LinearLayout spacing = row(); spacing.setPadding(px(24), 0, px(24), 0);
+        spacing.addView(text("Button spacing", 19, WHITE, false), new LinearLayout.LayoutParams(px(164), px(48)));
+        SeekBar gap = new SeekBar(this); gap.setMax(40); gap.setProgress(config.spacing);
+        gap.setContentDescription("Floating button spacing"); gap.setProgressTintList(ColorStateList.valueOf(TEAL));
+        spacing.addView(gap, new LinearLayout.LayoutParams(0, px(48), 1f));
+        TextView gapValue = text(config.spacing + " px", 20, WHITE, true); spacing.addView(gapValue, new LinearLayout.LayoutParams(px(76), px(48)));
+        spacing.addView(text("Between edges · default 12 px", 16, MUTED, false), new LinearLayout.LayoutParams(px(280), px(48)));
+        gap.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            public void onStartTrackingTouch(SeekBar view) { }
+            public void onStopTrackingTouch(SeekBar view) { }
+            public void onProgressChanged(SeekBar view, int value, boolean user) { config.spacing = value; gapValue.setText(value + " px"); buildPreview(); }
+        });
+        root.addView(spacing, new LinearLayout.LayoutParams(-1, px(48)));
         LinearLayout body = row(); body.setGravity(Gravity.TOP); body.setPadding(px(24), px(4), px(24), 0);
         root.addView(body, new LinearLayout.LayoutParams(-1, 0, 1f));
         LinearLayout left = column(); body.addView(left, new LinearLayout.LayoutParams(0, -1, 1.15f));
@@ -178,19 +192,19 @@ public final class FloatingButtonsActivity extends Activity {
         micPercentInput = null;
         if (editing == null) return;
         TextView heading = text("Customize " + editing.name, 25, WHITE, true); heading.setMaxLines(2);
-        customization.addView(heading, new LinearLayout.LayoutParams(-1, px(40)));
+        customization.addView(heading, new LinearLayout.LayoutParams(-1, px(36)));
         if (editing.isLive()) {
-            customization.addView(text("Microphone icon (fixed)", 21, WHITE, true), new LinearLayout.LayoutParams(-1, px(36)));
-            TextView fixedMic = symbol(FloatingConfig.MIC_ICON, 50, TEAL);
+            customization.addView(text("Microphone icon (fixed)", 21, WHITE, true), new LinearLayout.LayoutParams(-1, px(28)));
+            TextView fixedMic = symbol(FloatingConfig.MIC_ICON, 32, TEAL);
             fixedMic.setContentDescription("Fixed microphone icon");
-            customization.addView(fixedMic, new LinearLayout.LayoutParams(-1, px(64)));
-            customization.addView(text("Enlarge Live Speak icon by", 20, WHITE, true), new LinearLayout.LayoutParams(-1, px(36)));
+            customization.addView(fixedMic, new LinearLayout.LayoutParams(-1, px(36)));
+            customization.addView(text("Enlarge Live Speak button by", 20, WHITE, true), new LinearLayout.LayoutParams(-1, px(32)));
             LinearLayout inputRow = row(); customization.addView(inputRow);
             micPercentInput = new EditText(this); micPercentInput.setSingleLine(true); micPercentInput.setTextColor(WHITE);
             micPercentInput.setTypeface(font); micPercentInput.setTextSize(TypedValue.COMPLEX_UNIT_PX, px(24));
             micPercentInput.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
             micPercentInput.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(3)});
-            micPercentInput.setContentDescription("Live Speak icon enlargement percent"); micPercentInput.setText(micPercentDraft);
+            micPercentInput.setContentDescription("Live Speak button enlargement percent"); micPercentInput.setText(micPercentDraft);
             inputRow.addView(micPercentInput, new LinearLayout.LayoutParams(px(108), px(48)));
             inputRow.addView(text("%   Default: 50%", 20, WHITE, false));
             micPercentInput.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_DONE);
@@ -209,7 +223,7 @@ public final class FloatingButtonsActivity extends Activity {
                 }
                 public void afterTextChanged(android.text.Editable value) { }
             });
-            customization.addView(text("0–100%. Only the mic icon grows;\nbutton size and other icons stay the same.", 16, MUTED, false), new LinearLayout.LayoutParams(-1, px(50)));
+            customization.addView(text("0–100%. Button and microphone grow together.\nAll icons scale with their button size.", 16, MUTED, false), new LinearLayout.LayoutParams(-1, px(44)));
             return;
         }
         customization.addView(text("Button color", 21, WHITE, true), new LinearLayout.LayoutParams(-1, px(34)));
@@ -239,19 +253,28 @@ public final class FloatingButtonsActivity extends Activity {
         }
     }
     private void addPreview(String glyph, String label, int color, boolean live) {
-        int diameter = px(config.size * .62f); // scaled preview; actual overlay uses the chosen physical pixels
+        float factor = Math.min(.62f, 88f / config.diameter(true));
+        int diameter = px(config.diameter(live) * factor);
+        int largest = px(config.diameter(true) * factor);
         LinearLayout item = column(); item.setGravity(Gravity.CENTER);
-        int iconSize = Math.max(12, Math.round(config.size * .62f * .45f));
-        if (live) iconSize = Math.round(iconSize * (1 + config.micEnlargement / 100f));
+        int iconSize = Math.round(config.diameter(live) * factor * .45f);
         TextView circle = symbol(glyph, iconSize, color == TEAL ? WHITE : BG); circle.setIncludeFontPadding(false); circle.setBackground(shape(color, 0, true));
-        item.addView(circle, new LinearLayout.LayoutParams(diameter, diameter));
+        LinearLayout.LayoutParams circlePosition = new LinearLayout.LayoutParams(diameter, diameter);
+        circlePosition.topMargin = (largest - diameter) / 2;
+        item.addView(circle, circlePosition);
         TextView name = text(label, 12, WHITE, false); name.setGravity(Gravity.CENTER); name.setMaxLines(2);
-        item.addView(name, new LinearLayout.LayoutParams(diameter + px(8), px(28))); preview.addView(item);
+        LinearLayout.LayoutParams namePosition = new LinearLayout.LayoutParams(diameter, px(32));
+        namePosition.topMargin = (largest - diameter) / 2;
+        item.addView(name, namePosition);
+        LinearLayout.LayoutParams position = new LinearLayout.LayoutParams(diameter, -2);
+        position.leftMargin = preview.getChildCount() > 1 ? px(config.spacing * factor) : 0;
+        preview.addView(item, position);
     }
     private void buildPreview() {
         if (preview == null) return; preview.removeAllViews(); preview.setPadding(px(6), 0, px(6), 0); preview.setBackground(shape(SURFACE, LINE, false));
         TextView grip = symbol("\ue25d", 24, MUTED); preview.addView(grip, new LinearLayout.LayoutParams(px(28), px(70)));
         for (FloatingConfig.Item item : config.items) if (item.selected) addPreview(item.glyph(), item.name, item.buttonColor(), item.isLive());
+        preview.addView(symbol("\ue15b", 28, WHITE), new LinearLayout.LayoutParams(px(36), px(70)));
         preview.addView(symbol("\ue5cd", 28, WHITE), new LinearLayout.LayoutParams(px(36), px(70)));
     }
     private void save() {
@@ -261,7 +284,7 @@ public final class FloatingButtonsActivity extends Activity {
             config.micEnlargement = percent;
         } catch (NumberFormatException error) {
             if (micPercentInput != null) micPercentInput.setError("Enter 0–100");
-            toast("Enter a Live Speak icon enlargement from 0 to 100%."); return;
+            toast("Enter a Live Speak button enlargement from 0 to 100%."); return;
         }
         if (config.enabled && checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, MICROPHONE); return;
@@ -275,7 +298,7 @@ public final class FloatingButtonsActivity extends Activity {
                 }).show(); return;
         }
         if (!config.save(this)) { toast("Could not save settings"); return; }
-        saved = true; FloatingPanelService.sync(this, true); finish();
+        saved = true; FloatingConfig.prefs(this).edit().putBoolean("minimized", false).apply(); FloatingPanelService.sync(this, true); finish();
     }
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
@@ -303,6 +326,7 @@ public final class FloatingButtonsActivity extends Activity {
         } catch (Exception ignored) { }
         state.putString("draft", array.toString()); state.putBoolean("enabled", config.enabled); state.putInt("size", config.size);
         state.putInt("micEnlargement", config.micEnlargement); state.putString("micPercentDraft", micPercentDraft);
+        state.putInt("spacing", config.spacing);
         state.putBoolean("requestingOverlay", requestingOverlay); if (editing != null) state.putString("editing", editing.id);
     }
     @Override protected void onDestroy() {

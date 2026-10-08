@@ -71,10 +71,11 @@ public class MainActivity extends Activity {
     private File pendingFile;
     private double level;
     private float scale = 1f;
-    private int importEpoch;
+    private volatile int importEpoch;
+    private TextView previewPlay;
     private final Runnable refresh = new Runnable() {
         @Override public void run() {
-            updateHome();
+            updateHome(); updatePreview();
             if (!live.isActive() && !player.active() && !recorder.active()) abandonFocus();
             if (!paused) main.postDelayed(this, 120);
         }
@@ -171,7 +172,7 @@ public class MainActivity extends Activity {
     private void showHome() {
         page = "home"; rows.clear(); bars.clear(); lastHomeState = "";
         LinearLayout header = startPage("Outer Voice", false);
-        TextView floating = icon("\ue3e0", 30, TEAL);
+        TextView floating = icon("\ue913", 30, TEAL);
         floating.setContentDescription("Floating Buttons settings");
         clickable(floating, Color.TRANSPARENT, 0, 8, false);
         header.addView(floating, new LinearLayout.LayoutParams(px(48), px(48)));
@@ -187,6 +188,14 @@ public class MainActivity extends Activity {
         clickable(info, Color.TRANSPARENT, 0, 8, false);
         header.addView(info, new LinearLayout.LayoutParams(px(56), px(56)));
         info.setOnClickListener(v -> { stopAudio(); showCredits(); });
+        TextView exit = icon("\ue8ac", 30, WHITE); exit.setContentDescription("Exit app");
+        clickable(exit, Color.TRANSPARENT, 0, 8, false); header.addView(exit, new LinearLayout.LayoutParams(px(48), px(48)));
+        exit.setOnClickListener(v -> {
+            FloatingConfig.prefs(this).edit().putBoolean("enabled", false).putBoolean("minimized", false).commit();
+            stopService(new Intent(this, FloatingPanelService.class)); stopAudio(); importEpoch++;
+            if (pendingFile != null) pendingFile.delete(); pendingFile = null;
+            deleteTemporary(); finishAndRemoveTask();
+        });
         LinearLayout body = row(); body.setGravity(Gravity.TOP);
         root.addView(body, new LinearLayout.LayoutParams(-1, 0, 1f));
         LinearLayout left = column(); left.setGravity(Gravity.CENTER_HORIZONTAL);
@@ -329,7 +338,7 @@ public class MainActivity extends Activity {
     }
     private void deleteTemporary() { if (temporaryRecording != null) temporaryRecording.delete(); temporaryRecording = null; }
     private void cleanupTemporary() {
-        File[] files = getCacheDir().listFiles((d, name) -> name.startsWith("voice-") || name.equals("outer-test.wav"));
+        File[] files = getCacheDir().listFiles((d, name) -> name.startsWith("voice-") || name.startsWith("import-source-") || name.equals("outer-test.wav"));
         if (files != null) for (File file : files) file.delete();
     }
     private void toggleRecording(boolean forSound) {
@@ -450,7 +459,7 @@ public class MainActivity extends Activity {
     }
 
     private void showAdd() {
-        page = "add"; feedback = ""; startPage("Add Sound", true);
+        page = "add"; feedback = ""; stopService(new Intent(this, FloatingPanelService.class)); startPage("Add Sound", true);
         LinearLayout form = column(); form.setPadding(px(40), px(20), px(40), px(20));
         root.addView(form, new LinearLayout.LayoutParams(-1, 0, 1f));
         form.addView(text("Button name", 26, WHITE, true)); space(form, 10);
@@ -470,7 +479,7 @@ public class MainActivity extends Activity {
         form.addView(nameInput, new LinearLayout.LayoutParams(-1, px(62))); space(form, 20);
         form.addView(text("Import or record", 26, WHITE, true)); space(form, 10);
         LinearLayout sources = row();
-        TextView importButton = button("Import WAV", false);
+        TextView importButton = button("Import Sound", false);
         addRecord = button("Record microphone", false);
         sources.addView(importButton, new LinearLayout.LayoutParams(0, px(64), 1f));
         LinearLayout.LayoutParams recordParams = new LinearLayout.LayoutParams(0, px(64), 1f); recordParams.leftMargin = px(16);
@@ -478,8 +487,12 @@ public class MainActivity extends Activity {
         importButton.setOnClickListener(v -> chooseWav()); addRecord.setOnClickListener(v -> {
             if (importing) { toast("Wait for import to finish"); return; } toggleRecording(true);
         });
-        importLabel = text("PCM16 WAV • up to 20 MB", 19, MUTED, false);
-        form.addView(importLabel, new LinearLayout.LayoutParams(-1, px(40)));
+        importLabel = text("WAV, MP3 and other audio files", 19, MUTED, false);
+        LinearLayout imported = row(); imported.addView(importLabel, new LinearLayout.LayoutParams(0, px(48), 1f));
+        previewPlay = button("Play", false); previewPlay.setContentDescription("Test imported sound");
+        imported.addView(previewPlay, new LinearLayout.LayoutParams(px(132), px(44))); form.addView(imported);
+        previewPlay.setOnClickListener(v -> { if (pendingFile != null && !importing && !recorder.active()) playFile(pendingFile, "import-preview"); updatePreview(); });
+        updatePreview();
         recordInfo = text("Recording: 44.1 kHz mono PCM16 • up to 180 seconds", 18, MUTED, false);
         form.addView(recordInfo, new LinearLayout.LayoutParams(-1, px(36)));
         TextView browse = text("Browse files on this device", 19, TEAL, true);
@@ -497,46 +510,62 @@ public class MainActivity extends Activity {
         if (request != WAV_REQUEST || result != RESULT_OK || data == null || data.getData() == null || !"add".equals(page)) return;
         importWav(data.getData());
     }
+    private void updatePreview() {
+        if (!"add".equals(page) || previewPlay == null) return;
+        boolean available = pendingFile != null && !importing && !recorder.active();
+        if (previewPlay.isEnabled() != available) previewPlay.setEnabled(available);
+        previewPlay.setAlpha(available ? 1f : .4f);
+        String label = player.active() && "import-preview".equals(playingId) ? "Stop" : "Play";
+        if (!label.contentEquals(previewPlay.getText())) previewPlay.setText(label);
+    }
     private void importWav(final Uri uri) {
-        if (!"add".equals(page) || recorder.active()) return;
+        if (!"add".equals(page) || recorder.active() || importing) return;
+        stopAudio();
+        // A failed replacement must not leave Play pointing at an earlier, unnamed clip.
+        if (pendingFile != null) pendingFile.delete(); pendingFile = null;
         final int epoch = ++importEpoch;
-        importing = true; saveButton.setEnabled(false); saveButton.setAlpha(0.4f); importLabel.setText("Importing and checking WAV…");
+        importing = true; saveButton.setEnabled(false); saveButton.setAlpha(0.4f); importLabel.setText("Importing sound…"); updatePreview();
         new Thread(() -> {
+            File source = new File(getCacheDir(), "import-source-" + UUID.randomUUID());
             File copied = new File(getFilesDir(), "pending-" + UUID.randomUUID() + ".wav");
             String error = null;
-            try (InputStream input = openWav(uri); FileOutputStream output = new FileOutputStream(copied)) {
+            try (InputStream input = openWav(uri); FileOutputStream output = new FileOutputStream(source)) {
                 if (input == null) throw new java.io.IOException("Cannot open the selected file");
-                byte[] bytes = new byte[8192]; long total = 0; int count;
+                byte[] bytes = new byte[32768]; int count;
                 while ((count = input.read(bytes)) != -1) {
-                    total += count; if (total > 20L * 1024 * 1024) throw new java.io.IOException("WAV must be 20 MB or smaller");
+                    if (epoch != importEpoch) throw new java.io.IOException("Import cancelled");
                     output.write(bytes, 0, count);
                 }
-            } catch (Exception e) { error = e.getMessage(); }
-            if (error == null) try { WavFormat.read(copied); } catch (Exception e) { error = e.getMessage(); }
+            } catch (Exception e) { error = e.getMessage() == null ? "Cannot read sound file" : e.getMessage(); }
+            if (error == null) try { AudioImport.convert(source, copied, () -> epoch != importEpoch); }
+            catch (Exception e) { error = e.getMessage() == null ? "Cannot decode this sound" : e.getMessage(); }
+            source.delete();
             final String failure = error;
             main.post(() -> {
                 if (epoch != importEpoch || !"add".equals(page) || isFinishing()) { copied.delete(); return; }
                 importing = false; saveButton.setEnabled(true); saveButton.setAlpha(1f);
-                if (failure != null) { copied.delete(); importLabel.setText(failure); return; }
+                if (failure != null) { copied.delete(); importLabel.setText(failure); updatePreview(); return; }
                 if (pendingFile != null) pendingFile.delete(); pendingFile = copied;
-                String filename = "file".equals(uri.getScheme()) ? new File(uri.getPath()).getName() : "Imported WAV";
+                String filename = "file".equals(uri.getScheme()) ? new File(uri.getPath()).getName() : "Imported sound";
                 try (android.database.Cursor cursor = getContentResolver().query(uri, new String[]{android.provider.OpenableColumns.DISPLAY_NAME}, null, null, null)) {
                     if (cursor != null && cursor.moveToFirst()) filename = cursor.getString(0);
                 } catch (Exception ignored) { }
-                importLabel.setText(filename);
-                if (nameInput.getText().toString().trim().isEmpty()) nameInput.setText(filename.replaceFirst("(?i)\\.wav$", ""));
+                importLabel.setText(filename); updatePreview();
+                AudioDiagnostics.log("Sound imported and converted: " + filename);
+                if (nameInput.getText().toString().trim().isEmpty()) nameInput.setText(filename.replaceFirst("(?i)\\.[^.]+$", ""));
             });
-        }, "wav-import").start();
+        }, "sound-import").start();
     }
     private void saveSound() {
         String name = nameInput.getText().toString().trim();
         if (name.isEmpty()) { nameInput.setError("Enter a button name"); return; }
-        if (pendingFile == null || importing || recorder.active()) { toast("Import or record a WAV first"); return; }
+        if (pendingFile == null || importing || recorder.active()) { toast("Import or record a sound first"); return; }
+        stopAudio();
         String id = UUID.randomUUID().toString(); File target = new File(getFilesDir(), id + ".wav");
         if (!pendingFile.renameTo(target)) { toast("Could not save sound"); return; }
         Sound sound = new Sound(id, name); sounds.add(sound);
         if (!persistSounds()) { sounds.remove(sound); target.renameTo(pendingFile); toast("Could not save sound list"); return; }
-        pendingFile = null; showHome();
+        pendingFile = null; showHome(); FloatingPanelService.sync(this, false);
     }
     private void cancelAdd() {
         editDraft = null;
@@ -602,7 +631,7 @@ public class MainActivity extends Activity {
     private void chooseWav() {
         if (recorder.active() || importing) { toast("Stop recording or wait for import first"); return; }
         for (String action : new String[]{Intent.ACTION_OPEN_DOCUMENT, Intent.ACTION_GET_CONTENT}) {
-            Intent intent = new Intent(action).setType(Intent.ACTION_GET_CONTENT.equals(action) ? "audio/wav" : "*/*");
+            Intent intent = new Intent(action).setType("*/*");
             intent.addCategory(Intent.CATEGORY_OPENABLE); intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             try { startActivityForResult(intent, WAV_REQUEST); return; }
             catch (android.content.ActivityNotFoundException e) { AudioDiagnostics.log("Picker absent: " + action); }
@@ -630,10 +659,10 @@ public class MainActivity extends Activity {
                 if (!mount.getName().equals("emulated") && !mount.getName().equals("self")) addLocation(entries, labels, mount, "Storage");
             }
         } else {
-            File[] children = directory.listFiles(file -> file.isDirectory() || file.getName().toLowerCase(java.util.Locale.US).endsWith(".wav"));
+            File[] children = directory.listFiles(file -> !file.isHidden());
             if (children != null) {
                 java.util.Arrays.sort(children, (a, b) -> a.isDirectory() != b.isDirectory() ? (a.isDirectory() ? -1 : 1) : a.getName().compareToIgnoreCase(b.getName()));
-                for (File child : children) { entries.add(child); labels.add((child.isDirectory() ? "Folder: " : "WAV: ") + child.getName()); }
+                for (File child : children) { entries.add(child); labels.add((child.isDirectory() ? "Folder: " : "Sound: ") + child.getName()); }
             }
         }
         browseDirectory = directory;
@@ -642,11 +671,11 @@ public class MainActivity extends Activity {
                 File selected = entries.get(which);
                 if (selected.isDirectory()) browseFiles(selected); else importWav(Uri.fromFile(selected));
             }).setNegativeButton("Cancel", null).setNeutralButton(directory == null ? "Help" : "Up", (d, which) -> {
-                if (directory == null) toast("Copy a PCM16 WAV to Download or USB storage. Record microphone is also available.");
+                if (directory == null) toast("Copy an audio file to Download or USB storage. Record microphone is also available.");
                 else browseFiles(directory.getParentFile() != null && directory.getParentFile().canRead() ? directory.getParentFile() : null);
             }).create();
         dialog.show();
-        if (entries.isEmpty()) toast(directory == null ? "No readable storage found. You can record a sound instead." : "No folders or WAV files here; use Up to choose another location.");
+        if (entries.isEmpty()) toast(directory == null ? "No readable storage found. You can record a sound instead." : "No folders or sound files here; use Up to choose another location.");
     }
     private void addLocation(ArrayList<File> files, ArrayList<String> names, File file, String name) {
         if (!file.isDirectory() || !file.canRead()) return;
@@ -695,7 +724,7 @@ public class MainActivity extends Activity {
     }
     private void toast(String message) { Toast.makeText(this, message == null ? "Operation failed" : message, Toast.LENGTH_LONG).show(); }
     @Override public void onBackPressed() { if (!"home".equals(page)) cancelAdd(); else { stopAudio(); super.onBackPressed(); } }
-    @Override protected void onResume() { super.onResume(); paused = false; main.removeCallbacks(refresh); main.post(refresh); if (!"edit".equals(page)) FloatingPanelService.sync(this, false); }
+    @Override protected void onResume() { super.onResume(); paused = false; main.removeCallbacks(refresh); main.post(refresh); if ("home".equals(page)) FloatingPanelService.sync(this, false); }
     @Override protected void onPause() { paused = true; main.removeCallbacks(refresh); if (live != null) { stopAudio(); deleteTemporary(); if ("add".equals(page) && addRecord != null) { addRecord.setText("Record microphone"); saveButton.setEnabled(!importing); saveButton.setAlpha(importing ? .4f : 1f); recordInfo.setText("44.1 kHz mono PCM16 • up to 180 seconds"); } } super.onPause(); }
     @Override protected void onDestroy() { importEpoch++; if (live != null) stopAudio(); deleteTemporary(); main.removeCallbacksAndMessages(null); if (pendingFile != null) pendingFile.delete(); super.onDestroy(); }
 }
