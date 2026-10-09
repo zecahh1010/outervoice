@@ -8,7 +8,7 @@ Implements the approved interactive UI revisions in the native Android app. Andr
 - Floating Panel settings use **Buttons & Order** and **Size & Minimize** tabs. Six ordering entries fit; size, spacing, Live Speak enlargement, minimized size and timeout fit together with previews.
 - Ten colors arranged warm to cool, plus the default App Blue option for Live Speak. Its microphone stays fixed and its color can change. Twelve sound icons include Funny, Extreme Angry, Happy, Friendly, Sorry, Surprised, Calm, Urgent and Celebration.
 - Move / Minimize / Close toolbar with separated controls and a middle button that expands with panel width. Narrow single-button panels remain usable. Close asks for confirmation.
-- Smooth minimize/reopen and stronger recording pulse. Separate minimized size defaults to 88 px. Optional inactivity auto-minimize defaults to 30 seconds and waits during recording/playback/dragging.
+- Smooth minimize/reopen and stronger recording pulse. Each minimize centers the bubble on Live Speak's current position, including after reordering or moving the panel, and keeps it on screen. Separate minimized size defaults to 88 px. Optional inactivity auto-minimize defaults to 30 seconds and waits during recording/playback/dragging.
 - A minimized Live Speak-only bubble records directly while held; release plays without expanding. Dragging cancels and moves it. Positions, settings and minimized state persist.
 - Native foreground-service overlay continues to display over ordinary apps using Android's **Display over other apps** permission. Exit stops audio, disables the overlay and closes the task.
 

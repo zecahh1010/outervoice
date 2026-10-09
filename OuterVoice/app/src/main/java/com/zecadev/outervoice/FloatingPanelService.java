@@ -208,7 +208,11 @@ public final class FloatingPanelService extends Service {
     private void transitionPanel(boolean minimize){
         if(transitioning||panel==null)return;cancelAudio();main.removeCallbacks(autoMinimize);transitioning=true;
         int d=config.minimizedSize;long duration=ValueAnimator.areAnimatorsEnabled()?320:0;
-        if(minimize){int x=Math.max(0,Math.min(screenW-d,FloatingConfig.prefs(this).getInt("bubble_x",params.x))),y=Math.max(0,Math.min(screenH-d,FloatingConfig.prefs(this).getInt("bubble_y",params.y)));
+        if(minimize){
+            // Anchor each collapse to the actual microphone, including ordering and strip scrolling.
+            int[] location=new int[2];mic.getLocationOnScreen(location);
+            int x=Math.max(0,Math.min(screenW-d,Math.round(location[0]+mic.getWidth()*mic.getScaleX()/2f-d/2f)));
+            int y=Math.max(0,Math.min(screenH-d,Math.round(location[1]+mic.getHeight()*mic.getScaleY()/2f-d/2f)));
             panel.setPivotX(0);panel.setPivotY(0);panel.animate().scaleX(d/(float)params.width).scaleY(d/(float)params.height).translationX(x-params.x).translationY(y-params.y).alpha(0).setDuration(duration).setInterpolator(new DecelerateInterpolator()).withEndAction(()->{if(destroyed)return;FloatingConfig.prefs(this).edit().putBoolean("minimized",true).putInt("bubble_x",x).putInt("bubble_y",y).commit();buildPanel();panel.setAlpha(0);panel.animate().alpha(1).setDuration(ValueAnimator.areAnimatorsEnabled()?140:0).start();}).start();
         }else{int x=params.x,y=params.y;FloatingConfig.prefs(this).edit().putBoolean("minimized",false).commit();buildPanel();transitioning=true;panel.setPivotX(0);panel.setPivotY(0);panel.setScaleX(d/(float)params.width);panel.setScaleY(d/(float)params.height);panel.setTranslationX(x-params.x);panel.setTranslationY(y-params.y);panel.setAlpha(0);panel.animate().scaleX(1).scaleY(1).translationX(0).translationY(0).alpha(1).setDuration(duration).setInterpolator(new DecelerateInterpolator()).withEndAction(()->{transitioning=false;armAutoMinimize();}).start();}
     }

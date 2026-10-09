@@ -120,7 +120,9 @@ async function transitionPanel(minimize){
  const d=state.config.bubbleSize;
  if(minimize){
    const target=state.bubble;
-   target.x=Math.max(0,Math.min(target.x,1024-d));target.y=Math.max(0,Math.min(target.y,600-d));
+   const live=el.querySelector('[data-hold]').getBoundingClientRect(),device=$('#device').getBoundingClientRect();
+   target.x=Math.max(0,Math.min((live.left+live.width/2-device.left)/(device.width/1024)-d/2,1024-d));
+   target.y=Math.max(0,Math.min((live.top+live.height/2-device.top)/(device.height/600)-d/2,600-d));
    const dx=target.x-state.position.x,dy=target.y-state.position.y;
    el.style.pointerEvents='none';el.style.transformOrigin='top left';
    try{await el.animate([{transform:'translate(0,0) scale(1)',opacity:1},{transform:`translate(${dx}px,${dy}px) scale(${d/el.offsetWidth},${d/el.offsetHeight})`,opacity:0}],{duration,easing:'cubic-bezier(.22,1,.36,1)',fill:'forwards'}).finished}catch{}
