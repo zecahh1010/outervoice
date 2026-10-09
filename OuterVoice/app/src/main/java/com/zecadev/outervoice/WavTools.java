@@ -7,10 +7,14 @@ import java.io.RandomAccessFile;
 /** Pure Java WAV writing and peak normalization. */
 public final class WavTools {
     public static void header(RandomAccessFile output, long dataBytes) throws IOException {
-        if (dataBytes < 0 || dataBytes > 0xffffffffL - 36 || (dataBytes & 1) != 0) throw new IOException("Invalid PCM length");
+        header(output, dataBytes, 44100, 1);
+    }
+    public static void header(RandomAccessFile output, long dataBytes, int rate, int channels) throws IOException {
+        if (rate < 8000 || rate > 192000 || (channels != 1 && channels != 2)) throw new IOException("Invalid microphone format");
+        if (dataBytes < 0 || dataBytes > 0xffffffffL - 36 || dataBytes % (channels * 2) != 0) throw new IOException("Invalid PCM length");
         output.seek(0); output.writeBytes("RIFF"); le(output, dataBytes + 36, 4); output.writeBytes("WAVEfmt ");
-        le(output, 16, 4); le(output, 1, 2); le(output, 1, 2); le(output, 44100, 4); le(output, 88200, 4);
-        le(output, 2, 2); le(output, 16, 2); output.writeBytes("data"); le(output, dataBytes, 4);
+        le(output, 16, 4); le(output, 1, 2); le(output, channels, 2); le(output, rate, 4); le(output, rate * channels * 2L, 4);
+        le(output, channels * 2, 2); le(output, 16, 2); output.writeBytes("data"); le(output, dataBytes, 4);
     }
     private static void le(RandomAccessFile f, long value, int count) throws IOException {
         for (int i = 0; i < count; i++) f.write((int)(value >> (8 * i)) & 255);

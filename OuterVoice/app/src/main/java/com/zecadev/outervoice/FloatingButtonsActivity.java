@@ -17,320 +17,140 @@ import android.view.View;
 import android.view.WindowManager;
 import android.widget.CheckBox;
 import android.widget.EditText;
-import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 import java.util.Collections;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
-/** Native settings screen based on the approved first mockup. */
+/** The two compact tabs from the approved interactive prototype. */
 public final class FloatingButtonsActivity extends Activity {
-    private static final int BG = 0xff0f171c, SURFACE = 0xff182329, LINE = 0xff30414a;
-    private static final int WHITE = 0xfff6f9fa, MUTED = 0xffaebcc7, TEAL = FloatingConfig.TEAL;
-    private static final int MICROPHONE = 20, OVERLAY = 21;
+    private static final int BG=0xff0f171c,SURFACE=0xff182329,LINE=0xff30414a,WHITE=0xfff6f9fa,MUTED=0xffaebcc7,TEAL=FloatingConfig.TEAL;
+    private static final int MICROPHONE=20,OVERLAY=21;
     private FloatingConfig config;
     private FloatingConfig.Item editing;
-    private Typeface font, icons;
+    private Typeface font,icons;
     private float scale;
-    private LinearLayout list, customization, preview;
-    private TextView sizeValue;
-    private CheckBox enabled;
-    private String micPercentDraft;
-    private EditText micPercentInput;
-    private boolean requestingOverlay, saved;
-    private int px(float value) { return Math.round(value * scale); }
-    private LinearLayout row() { LinearLayout view = new LinearLayout(this); view.setGravity(Gravity.CENTER_VERTICAL); return view; }
-    private LinearLayout column() { LinearLayout view = new LinearLayout(this); view.setOrientation(LinearLayout.VERTICAL); return view; }
-    private TextView text(String value, int size, int color, boolean bold) {
-        TextView view = new TextView(this); view.setText(value); view.setTextColor(color);
-        view.setTextSize(TypedValue.COMPLEX_UNIT_PX, px(size)); view.setGravity(Gravity.CENTER_VERTICAL);
-        view.setTypeface(Typeface.create(font, bold ? Typeface.BOLD : Typeface.NORMAL)); return view;
+    private LinearLayout body,list,customization,preview,minPreview;
+    private TextView orderTab,sizeTab;
+    private EditText secondsInput;
+    private String secondsDraft;
+    private boolean sizeSelected,requestingOverlay,saved;
+    private int px(float v){return Math.round(v*scale);}
+    private LinearLayout row(){LinearLayout v=new LinearLayout(this);v.setGravity(Gravity.CENTER_VERTICAL);return v;}
+    private LinearLayout column(){LinearLayout v=new LinearLayout(this);v.setOrientation(LinearLayout.VERTICAL);return v;}
+    private TextView text(String s,int size,int color,boolean bold){TextView v=new TextView(this);v.setText(s);v.setTextColor(color);v.setTextSize(TypedValue.COMPLEX_UNIT_PX,px(size));v.setTypeface(Typeface.create(font,bold?Typeface.BOLD:Typeface.NORMAL));v.setGravity(Gravity.CENTER_VERTICAL);return v;}
+    private TextView symbol(String s,int size,int color){TextView v=text(s,size,color,false);v.setTypeface(icons);v.setGravity(Gravity.CENTER);return v;}
+    private GradientDrawable shape(int color,int outline,boolean circle){GradientDrawable d=new GradientDrawable();d.setColor(color);if(circle)d.setShape(GradientDrawable.OVAL);else d.setCornerRadius(px(10));if(outline!=0)d.setStroke(px(1),outline);return d;}
+    private TextView button(String s,boolean primary){TextView v=text(s,20,primary?BG:WHITE,true);v.setGravity(Gravity.CENTER);v.setBackground(shape(primary?TEAL:SURFACE,primary?0:LINE,false));v.setClickable(true);v.setFocusable(true);return v;}
+    private SoundIcon icon(FloatingConfig.Item item,int size){return new SoundIcon(this,icons,item.icon,item.isLive(),px(size),item.foreground());}
+    private void toast(String s){Toast.makeText(this,s,Toast.LENGTH_LONG).show();}
+    @Override public void onCreate(Bundle state){
+        super.onCreate(state);getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY|View.SYSTEM_UI_FLAG_HIDE_NAVIGATION|View.SYSTEM_UI_FLAG_FULLSCREEN);
+        scale=Math.min(getResources().getDisplayMetrics().widthPixels/1024f,getResources().getDisplayMetrics().heightPixels/600f);
+        font=Typeface.createFromAsset(getAssets(),"Inter.ttf");icons=Typeface.createFromAsset(getAssets(),"MaterialIcons-Regular.ttf");
+        config=FloatingConfig.load(this);editing=config.items.get(0);secondsDraft=String.valueOf(config.autoSeconds);
+        if(state!=null)try{
+            JSONArray array=new JSONArray(state.getString("draft","[]"));java.util.ArrayList<FloatingConfig.Item> ordered=new java.util.ArrayList<>();
+            for(int i=0;i<array.length();i++){JSONObject value=array.getJSONObject(i);for(FloatingConfig.Item item:config.items)if(item.id.equals(value.getString("id"))){item.selected=item.isLive()||value.getBoolean("selected");item.color=value.getInt("color");item.icon=value.getInt("icon");item.liveColor=value.optInt("live_color",-1);ordered.add(item);}}
+            for(FloatingConfig.Item item:config.items)if(!ordered.contains(item))ordered.add(item);config.items.clear();config.items.addAll(ordered);
+            config.enabled=state.getBoolean("enabled");config.size=state.getInt("size",88);config.spacing=state.getInt("spacing",12);config.micEnlargement=state.getInt("enlargement",50);
+            config.minimizedSize=state.getInt("minimizedSize",88);config.autoMinimize=state.getBoolean("autoMinimize");secondsDraft=state.getString("seconds","30");
+            sizeSelected=state.getBoolean("sizeTab");requestingOverlay=state.getBoolean("requestingOverlay");
+            for(FloatingConfig.Item item:config.items)if(item.id.equals(state.getString("editing")))editing=item;
+        }catch(Exception ignored){}
+        stopService(new Intent(this,FloatingPanelService.class));build();
     }
-    private TextView symbol(String value, int size, int color) {
-        TextView view = text(value, size, color, false); view.setTypeface(icons); view.setGravity(Gravity.CENTER); return view;
+    private void build(){
+        LinearLayout root=column();root.setBackgroundColor(BG);setContentView(root);
+        LinearLayout header=row();header.setPadding(px(24),0,px(24),0);
+        TextView back=symbol("\ue5c4",32,WHITE);back.setContentDescription("Back");back.setOnClickListener(v->cancel());header.addView(back,new LinearLayout.LayoutParams(px(48),px(56)));
+        header.addView(text("Floating Panel",34,WHITE,true),new LinearLayout.LayoutParams(0,-1,1));
+        CheckBox enabled=new CheckBox(this);enabled.setText("Enable floating panel");enabled.setTextColor(WHITE);enabled.setTypeface(font);enabled.setTextSize(TypedValue.COMPLEX_UNIT_PX,px(19));enabled.setButtonTintList(ColorStateList.valueOf(TEAL));enabled.setChecked(config.enabled);enabled.setOnCheckedChangeListener((v,checked)->config.enabled=checked);
+        header.addView(enabled,new LinearLayout.LayoutParams(px(320),-1));root.addView(header,new LinearLayout.LayoutParams(-1,px(68)));
+        LinearLayout tabs=row();tabs.setPadding(px(24),px(12),px(24),0);orderTab=button("Buttons & Order",false);sizeTab=button("Size & Minimize",false);
+        tabs.addView(orderTab,new LinearLayout.LayoutParams(px(224),px(56)));LinearLayout.LayoutParams second=new LinearLayout.LayoutParams(px(224),px(56));second.leftMargin=px(12);tabs.addView(sizeTab,second);root.addView(tabs,new LinearLayout.LayoutParams(-1,px(68)));
+        orderTab.setOnClickListener(v->{sizeSelected=false;renderTab();});sizeTab.setOnClickListener(v->{sizeSelected=true;renderTab();});
+        body=row();body.setGravity(Gravity.TOP);body.setPadding(px(24),px(20),px(24),px(8));root.addView(body,new LinearLayout.LayoutParams(-1,0,1));
+        LinearLayout actions=row();actions.setGravity(Gravity.RIGHT);actions.setPadding(px(24),px(12),px(24),px(14));root.addView(actions,new LinearLayout.LayoutParams(-1,px(86)));
+        TextView cancel=button("Cancel",false),save=button("Save Settings",true);actions.addView(cancel,new LinearLayout.LayoutParams(px(200),px(60)));LinearLayout.LayoutParams saveSize=new LinearLayout.LayoutParams(px(244),px(60));saveSize.leftMargin=px(16);actions.addView(save,saveSize);cancel.setOnClickListener(v->cancel());save.setOnClickListener(v->save());
+        renderTab();
     }
-    private GradientDrawable shape(int color, int outline, boolean circle) {
-        GradientDrawable drawable = new GradientDrawable(); drawable.setColor(color);
-        if (circle) drawable.setShape(GradientDrawable.OVAL); else drawable.setCornerRadius(px(10));
-        if (outline != 0) drawable.setStroke(px(2), outline); return drawable;
+    private void renderTab(){
+        orderTab.setSelected(!sizeSelected);sizeTab.setSelected(sizeSelected);
+        for(TextView tab:new TextView[]{orderTab,sizeTab}){tab.setTextColor(tab.isSelected()?TEAL:WHITE);tab.setBackground(shape(tab.isSelected()?0xff113039:SURFACE,tab.isSelected()?TEAL:LINE,false));}
+        body.removeAllViews();preview=null;minPreview=null;secondsInput=null;
+        if(sizeSelected){buildSizes();return;}
+        LinearLayout left=column();body.addView(left,new LinearLayout.LayoutParams(0,-1,1.1f));left.addView(text("Panel buttons",22,WHITE,true),new LinearLayout.LayoutParams(-1,px(30)));left.addView(text("Select sounds. Use arrows to change order.",14,MUTED,false),new LinearLayout.LayoutParams(-1,px(30)));
+        ScrollView scroll=new ScrollView(this);scroll.setScrollbarFadingEnabled(false);scroll.setVerticalScrollBarEnabled(true);list=column();scroll.addView(list);left.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+        View divider=new View(this);divider.setBackgroundColor(LINE);LinearLayout.LayoutParams d=new LinearLayout.LayoutParams(px(1),-1);d.setMargins(px(24),0,px(24),0);body.addView(divider,d);
+        customization=column();body.addView(customization,new LinearLayout.LayoutParams(0,-1,1));buildRows();buildCustomization();
     }
-    private TextView button(String value, boolean primary) {
-        TextView view = text(value, 22, primary ? BG : WHITE, true); view.setGravity(Gravity.CENTER);
-        view.setBackground(shape(primary ? TEAL : SURFACE, primary ? 0 : LINE, false));
-        view.setClickable(true); view.setFocusable(true); return view;
-    }
-    private void toast(String message) { Toast.makeText(this, message, Toast.LENGTH_LONG).show(); }
-    @Override public void onCreate(Bundle state) {
-        super.onCreate(state);
-        getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
-        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_FULLSCREEN);
-        scale = Math.min(getResources().getDisplayMetrics().widthPixels / 1024f, getResources().getDisplayMetrics().heightPixels / 600f);
-        font = Typeface.createFromAsset(getAssets(), "Inter.ttf"); icons = Typeface.createFromAsset(getAssets(), "MaterialIcons-Regular.ttf");
-        config = FloatingConfig.load(this); if (!config.items.isEmpty()) editing = config.items.get(0);
-        micPercentDraft = String.valueOf(config.micEnlargement);
-        if (state != null) {
-            // Keep draft changes if Android recreates the configuration screen.
-            try {
-                org.json.JSONArray draft = new org.json.JSONArray(state.getString("draft", "[]"));
-                java.util.ArrayList<FloatingConfig.Item> ordered = new java.util.ArrayList<>();
-                for (int i = 0; i < draft.length(); i++) {
-                    org.json.JSONObject value = draft.getJSONObject(i);
-                    for (FloatingConfig.Item item : config.items) if (item.id.equals(value.getString("id"))) {
-                        item.selected = item.isLive() || value.getBoolean("selected"); item.color = value.getInt("color"); item.icon = value.getInt("icon"); ordered.add(item);
-                    }
-                }
-                for (FloatingConfig.Item item : config.items) if (!ordered.contains(item)) ordered.add(item);
-                config.items.clear(); config.items.addAll(ordered);
-                config.enabled = state.getBoolean("enabled"); config.size = state.getInt("size", 88);
-                config.micEnlargement = state.getInt("micEnlargement", 50);
-                config.spacing = state.getInt("spacing", 12);
-                micPercentDraft = state.getString("micPercentDraft", String.valueOf(config.micEnlargement));
-                requestingOverlay = state.getBoolean("requestingOverlay");
-                for (FloatingConfig.Item item : config.items) if (item.id.equals(state.getString("editing"))) editing = item;
-            } catch (Exception ignored) { }
-        }
-        // Avoid covering the controls while editing; persisted settings are restored on Cancel.
-        stopService(new Intent(this, FloatingPanelService.class));
-        build();
-    }
-    private void build() {
-        LinearLayout root = column(); root.setBackgroundColor(BG); setContentView(root);
-        LinearLayout header = row(); header.setPadding(px(24), 0, px(24), 0); header.setBackgroundColor(SURFACE);
-        TextView back = symbol("\ue5c4", 32, WHITE); back.setContentDescription("Back"); back.setOnClickListener(v -> cancel());
-        header.addView(back, new LinearLayout.LayoutParams(px(48), px(56)));
-        header.addView(text("Floating Buttons", 34, WHITE, true)); root.addView(header, new LinearLayout.LayoutParams(-1, px(68)));
-        LinearLayout settings = row(); settings.setPadding(px(24), 0, px(24), 0);
-        enabled = new CheckBox(this); enabled.setText("Enable floating panel"); enabled.setTextColor(WHITE);
-        enabled.setTypeface(font); enabled.setTextSize(TypedValue.COMPLEX_UNIT_PX, px(19)); enabled.setButtonTintList(ColorStateList.valueOf(TEAL));
-        enabled.setChecked(config.enabled); enabled.setOnCheckedChangeListener((view, checked) -> config.enabled = checked);
-        settings.addView(enabled, new LinearLayout.LayoutParams(px(288), px(60)));
-        settings.addView(text("Button size", 19, WHITE, false), new LinearLayout.LayoutParams(px(110), px(60)));
-        SeekBar slider = new SeekBar(this); slider.setMax((FloatingConfig.MAX_SIZE - FloatingConfig.MIN_SIZE) / 4);
-        slider.setProgress((config.size - FloatingConfig.MIN_SIZE) / 4); slider.setProgressTintList(ColorStateList.valueOf(TEAL));
-        slider.setContentDescription("Floating button size"); settings.addView(slider, new LinearLayout.LayoutParams(0, px(48), 1f));
-        sizeValue = text(config.size + " px", 20, WHITE, true); settings.addView(sizeValue, new LinearLayout.LayoutParams(px(76), px(60)));
-        TextView defaultSize = text("Default: 88 px", 16, MUTED, false); settings.addView(defaultSize, new LinearLayout.LayoutParams(px(132), px(60)));
-        TextView reset = text("Reset", 19, TEAL, true); reset.setGravity(Gravity.CENTER); settings.addView(reset, new LinearLayout.LayoutParams(px(68), px(60)));
-        reset.setOnClickListener(v -> slider.setProgress((88 - FloatingConfig.MIN_SIZE) / 4));
-        slider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            public void onStartTrackingTouch(SeekBar view) { }
-            public void onStopTrackingTouch(SeekBar view) { }
-            public void onProgressChanged(SeekBar view, int value, boolean user) {
-                config.size = FloatingConfig.MIN_SIZE + value * 4; sizeValue.setText(config.size + " px"); buildPreview();
-            }
-        }); root.addView(settings, new LinearLayout.LayoutParams(-1, px(60)));
-        LinearLayout spacing = row(); spacing.setPadding(px(24), 0, px(24), 0);
-        spacing.addView(text("Button spacing", 19, WHITE, false), new LinearLayout.LayoutParams(px(164), px(48)));
-        SeekBar gap = new SeekBar(this); gap.setMax(40); gap.setProgress(config.spacing);
-        gap.setContentDescription("Floating button spacing"); gap.setProgressTintList(ColorStateList.valueOf(TEAL));
-        spacing.addView(gap, new LinearLayout.LayoutParams(0, px(48), 1f));
-        TextView gapValue = text(config.spacing + " px", 20, WHITE, true); spacing.addView(gapValue, new LinearLayout.LayoutParams(px(76), px(48)));
-        spacing.addView(text("Between edges · default 12 px", 16, MUTED, false), new LinearLayout.LayoutParams(px(280), px(48)));
-        gap.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            public void onStartTrackingTouch(SeekBar view) { }
-            public void onStopTrackingTouch(SeekBar view) { }
-            public void onProgressChanged(SeekBar view, int value, boolean user) { config.spacing = value; gapValue.setText(value + " px"); buildPreview(); }
-        });
-        root.addView(spacing, new LinearLayout.LayoutParams(-1, px(48)));
-        LinearLayout body = row(); body.setGravity(Gravity.TOP); body.setPadding(px(24), px(4), px(24), 0);
-        root.addView(body, new LinearLayout.LayoutParams(-1, 0, 1f));
-        LinearLayout left = column(); body.addView(left, new LinearLayout.LayoutParams(0, -1, 1.15f));
-        left.addView(text("Panel buttons", 26, WHITE, true), new LinearLayout.LayoutParams(-1, px(40)));
-        ScrollView scroll = new ScrollView(this); scroll.setScrollbarFadingEnabled(false); list = column(); scroll.addView(list);
-        left.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1f));
-        View divider = new View(this); divider.setBackgroundColor(LINE); LinearLayout.LayoutParams d = new LinearLayout.LayoutParams(px(1), -1); d.setMargins(px(18), 0, px(24), 0); body.addView(divider, d);
-        ScrollView detailScroll = new ScrollView(this); customization = column(); detailScroll.addView(customization);
-        body.addView(detailScroll, new LinearLayout.LayoutParams(0, -1, 1f));
-        LinearLayout footer = row(); footer.setPadding(px(24), px(10), px(24), px(16));
-        root.addView(footer, new LinearLayout.LayoutParams(-1, px(194)));
-        LinearLayout previewColumn = column(); footer.addView(previewColumn, new LinearLayout.LayoutParams(0, -1, 1.3f));
-        previewColumn.addView(text("Floating panel preview", 21, WHITE, true), new LinearLayout.LayoutParams(-1, px(30)));
-        HorizontalScrollView previewScroll = new HorizontalScrollView(this); preview = row(); previewScroll.addView(preview);
-        previewColumn.addView(previewScroll, new LinearLayout.LayoutParams(-1, 0, 1f));
-        previewColumn.addView(text("Hold Live Speak; release to play. Tap sounds to play.", 13, MUTED, false), new LinearLayout.LayoutParams(-1, px(20)));
-        LinearLayout actions = row(); actions.setGravity(Gravity.BOTTOM); LinearLayout.LayoutParams actionSize = new LinearLayout.LayoutParams(0, -1, 1f); actionSize.leftMargin = px(28); footer.addView(actions, actionSize);
-        TextView cancel = button("Cancel", false), save = button("Save Settings", true);
-        actions.addView(cancel, new LinearLayout.LayoutParams(0, px(56), .8f));
-        LinearLayout.LayoutParams saveSize = new LinearLayout.LayoutParams(0, px(56), 1.2f); saveSize.leftMargin = px(12); actions.addView(save, saveSize);
-        cancel.setOnClickListener(v -> cancel()); save.setOnClickListener(v -> save());
-        buildRows(); buildCustomization(); buildPreview();
-    }
-    private void buildRows() {
-        list.removeAllViews();
-        if (config.items.isEmpty()) list.addView(text("No saved sounds yet.\nLive Speak is always available.", 20, MUTED, false));
-        for (FloatingConfig.Item item : config.items) {
-            LinearLayout line = row(); line.setPadding(px(8), 0, px(8), 0);
-            line.setBackground(shape(item == editing ? 0xff113039 : SURFACE, item == editing ? TEAL : LINE, false));
-            LinearLayout.LayoutParams lineSize = new LinearLayout.LayoutParams(-1, px(54)); lineSize.bottomMargin = px(6); list.addView(line, lineSize);
-            CheckBox check = new CheckBox(this); check.setButtonTintList(ColorStateList.valueOf(TEAL)); check.setContentDescription("Show " + item.name + " in floating panel"); check.setChecked(item.selected);
-            if (item.isLive()) { check.setChecked(true); check.setEnabled(false); check.setContentDescription("Live Speak is always included"); }
-            line.addView(check, new LinearLayout.LayoutParams(px(40), -1));
-            if (!item.isLive()) check.setOnCheckedChangeListener((view, selected) -> { item.selected = selected; editing = item; buildRows(); buildCustomization(); buildPreview(); });
-            TextView badge = symbol(item.glyph(), 24, item.isLive() ? WHITE : BG); badge.setBackground(shape(item.buttonColor(), 0, true));
-            line.addView(badge, new LinearLayout.LayoutParams(px(36), px(36)));
-            TextView name = text(item.name, 20, WHITE, true); name.setPadding(px(12), 0, px(4), 0); name.setMaxLines(2);
-            line.addView(name, new LinearLayout.LayoutParams(0, -1, 1f));
-            View.OnClickListener edit = v -> { editing = item; buildRows(); buildCustomization(); };
-            badge.setOnClickListener(edit); name.setOnClickListener(edit); line.setOnClickListener(edit);
-            for (int direction : new int[]{-1, 1}) {
-                TextView arrow = symbol(direction < 0 ? "\ue5d8" : "\ue5db", 27, WHITE);
-                arrow.setContentDescription((direction < 0 ? "Move up " : "Move down ") + item.name);
-                int next = selectedNeighbor(item, direction); arrow.setEnabled(item.selected && next >= 0); arrow.setAlpha(arrow.isEnabled() ? 1f : .3f);
-                line.addView(arrow, new LinearLayout.LayoutParams(px(42), -1));
-                arrow.setOnClickListener(v -> { int target = selectedNeighbor(item, direction); if (target >= 0) { Collections.swap(config.items, config.items.indexOf(item), target); buildRows(); buildPreview(); } });
-            }
+    private void buildRows(){
+        list.removeAllViews();for(FloatingConfig.Item item:config.items){
+            LinearLayout line=row();line.setPadding(px(6),0,px(6),0);line.setBackground(shape(item==editing?0xff113039:SURFACE,item==editing?TEAL:LINE,false));LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,px(42));p.bottomMargin=px(4);list.addView(line,p);
+            CheckBox check=new CheckBox(this);check.setButtonTintList(ColorStateList.valueOf(TEAL));check.setContentDescription("Show "+item.name+" in floating panel");check.setChecked(item.selected);check.setEnabled(!item.isLive());line.addView(check,new LinearLayout.LayoutParams(px(36),-1));
+            if(!item.isLive())check.setOnCheckedChangeListener((v,on)->{item.selected=on;editing=item;buildRows();buildCustomization();});
+            SoundIcon badge=icon(item,19);badge.setBackground(shape(item.buttonColor(),0,true));line.addView(badge,new LinearLayout.LayoutParams(px(28),px(28)));
+            TextView name=text(item.name,16,WHITE,true);name.setMaxLines(2);name.setPadding(px(6),0,px(4),0);line.addView(name,new LinearLayout.LayoutParams(0,-1,1));
+            View.OnClickListener select=v->{editing=item;buildRows();buildCustomization();};name.setOnClickListener(select);badge.setOnClickListener(select);
+            for(int direction:new int[]{-1,1}){TextView arrow=symbol(direction<0?"\ue5d8":"\ue5db",24,WHITE);arrow.setContentDescription((direction<0?"Move up ":"Move down ")+item.name);arrow.setEnabled(item.selected&&neighbor(item,direction)>=0);arrow.setAlpha(arrow.isEnabled()?1:.3f);line.addView(arrow,new LinearLayout.LayoutParams(px(38),px(38)));arrow.setOnClickListener(v->{int target=neighbor(item,direction);if(target>=0){Collections.swap(config.items,config.items.indexOf(item),target);buildRows();}});}
         }
     }
-    private int selectedNeighbor(FloatingConfig.Item item, int direction) {
-        for (int i = config.items.indexOf(item) + direction; i >= 0 && i < config.items.size(); i += direction) if (config.items.get(i).selected) return i;
-        return -1;
-    }
-    private void buildCustomization() {
-        customization.removeAllViews();
-        micPercentInput = null;
-        if (editing == null) return;
-        TextView heading = text("Customize " + editing.name, 25, WHITE, true); heading.setMaxLines(2);
-        customization.addView(heading, new LinearLayout.LayoutParams(-1, px(36)));
-        if (editing.isLive()) {
-            customization.addView(text("Microphone icon (fixed)", 21, WHITE, true), new LinearLayout.LayoutParams(-1, px(28)));
-            TextView fixedMic = symbol(FloatingConfig.MIC_ICON, 32, TEAL);
-            fixedMic.setContentDescription("Fixed microphone icon");
-            customization.addView(fixedMic, new LinearLayout.LayoutParams(-1, px(36)));
-            customization.addView(text("Enlarge Live Speak button by", 20, WHITE, true), new LinearLayout.LayoutParams(-1, px(32)));
-            LinearLayout inputRow = row(); customization.addView(inputRow);
-            micPercentInput = new EditText(this); micPercentInput.setSingleLine(true); micPercentInput.setTextColor(WHITE);
-            micPercentInput.setTypeface(font); micPercentInput.setTextSize(TypedValue.COMPLEX_UNIT_PX, px(24));
-            micPercentInput.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
-            micPercentInput.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(3)});
-            micPercentInput.setContentDescription("Live Speak button enlargement percent"); micPercentInput.setText(micPercentDraft);
-            inputRow.addView(micPercentInput, new LinearLayout.LayoutParams(px(108), px(48)));
-            inputRow.addView(text("%   Default: 50%", 20, WHITE, false));
-            micPercentInput.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_DONE);
-            micPercentInput.setOnEditorActionListener((view, action, event) -> {
-                if (action != android.view.inputmethod.EditorInfo.IME_ACTION_DONE) return false;
-                android.view.inputmethod.InputMethodManager keyboard = (android.view.inputmethod.InputMethodManager)getSystemService(INPUT_METHOD_SERVICE);
-                if (keyboard != null) keyboard.hideSoftInputFromWindow(view.getWindowToken(), 0); return true;
-            });
-            micPercentInput.addTextChangedListener(new android.text.TextWatcher() {
-                public void beforeTextChanged(CharSequence value, int start, int count, int after) { }
-                public void onTextChanged(CharSequence value, int start, int before, int count) {
-                    micPercentDraft = value.toString();
-                    try { int percent = Integer.parseInt(micPercentDraft);
-                        if (percent >= 0 && percent <= FloatingConfig.MAX_MIC_ENLARGEMENT) { config.micEnlargement = percent; buildPreview(); }
-                    } catch (NumberFormatException ignored) { }
-                }
-                public void afterTextChanged(android.text.Editable value) { }
-            });
-            customization.addView(text("0–100%. Button and microphone grow together.\nAll icons scale with their button size.", 16, MUTED, false), new LinearLayout.LayoutParams(-1, px(44)));
-            return;
+    private int neighbor(FloatingConfig.Item item,int direction){for(int i=config.items.indexOf(item)+direction;i>=0&&i<config.items.size();i+=direction)if(config.items.get(i).selected)return i;return -1;}
+    private void buildCustomization(){
+        customization.removeAllViews();customization.addView(text("Customize "+editing.name,22,WHITE,true),new LinearLayout.LayoutParams(-1,px(32)));customization.addView(text("Button color",18,WHITE,true),new LinearLayout.LayoutParams(-1,px(28)));
+        if(editing.isLive()){
+            LinearLayout defaultRow=row();defaultRow.setBackground(shape(editing.liveColor<0?0xff113039:BG,editing.liveColor<0?TEAL:0,false));defaultRow.setPadding(px(4),0,px(10),0);
+            TextView dot=text("",10,WHITE,false);dot.setBackground(shape(TEAL,0,true));defaultRow.addView(dot,new LinearLayout.LayoutParams(px(32),px(32)));TextView label=text("App Blue",14,WHITE,true);label.setPadding(px(10),0,px(10),0);defaultRow.addView(label);defaultRow.addView(text("Default color",12,MUTED,false));defaultRow.setContentDescription("Color App Blue");defaultRow.setOnClickListener(v->{editing.liveColor=-1;buildRows();buildCustomization();});LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-2,px(40));p.bottomMargin=px(8);customization.addView(defaultRow,p);
         }
-        customization.addView(text("Button color", 21, WHITE, true), new LinearLayout.LayoutParams(-1, px(34)));
-        LinearLayout colors = row(); colors.setGravity(Gravity.TOP); customization.addView(colors);
-        for (int i = 0; i < FloatingConfig.COLORS.length; i++) {
-            final int value = i; LinearLayout swatch = column(); swatch.setGravity(Gravity.CENTER_HORIZONTAL);
-            colors.addView(swatch, new LinearLayout.LayoutParams(0, px(72), 1f));
-            TextView circle = text("", 16, BG, false); circle.setBackground(shape(FloatingConfig.COLORS[i], editing.color == i ? TEAL : 0, true));
-            circle.setContentDescription("Color " + FloatingConfig.COLOR_NAMES[i]);
-            swatch.addView(circle, new LinearLayout.LayoutParams(px(43), px(43)));
-            TextView label = text(FloatingConfig.COLOR_NAMES[i], 12, WHITE, false); label.setGravity(Gravity.CENTER);
-            swatch.addView(label, new LinearLayout.LayoutParams(-1, px(28)));
-            View.OnClickListener select = v -> { editing.color = value; buildRows(); buildCustomization(); buildPreview(); };
-            swatch.setOnClickListener(select); circle.setOnClickListener(select);
+        LinearLayout swatches=row();swatches.setGravity(Gravity.TOP);customization.addView(swatches,new LinearLayout.LayoutParams(-1,px(64)));
+        for(int index:FloatingConfig.COLOR_ORDER){LinearLayout swatch=column();swatch.setGravity(Gravity.CENTER_HORIZONTAL);swatches.addView(swatch,new LinearLayout.LayoutParams(0,-1,1));TextView dot=text("",10,BG,false);dot.setBackground(shape(FloatingConfig.COLORS[index],(editing.isLive()?editing.liveColor:editing.color)==index?TEAL:0,true));swatch.addView(dot,new LinearLayout.LayoutParams(px(32),px(32)));TextView label=text(FloatingConfig.COLOR_NAMES[index],10,WHITE,false);label.setSingleLine(true);label.setGravity(Gravity.CENTER);swatch.addView(label,new LinearLayout.LayoutParams(-1,px(20)));swatch.setContentDescription("Color "+FloatingConfig.COLOR_NAMES[index]);swatch.setOnClickListener(v->{if(editing.isLive())editing.liveColor=index;else editing.color=index;buildRows();buildCustomization();});}
+        if(editing.isLive()){
+            customization.addView(text("Button preview",18,WHITE,true),new LinearLayout.LayoutParams(-1,px(28)));LinearLayout sample=row();sample.setGravity(Gravity.CENTER);sample.setBackground(shape(SURFACE,LINE,false));int d=Math.min(120,config.diameter(true));SoundIcon mic=icon(editing,Math.round(d*.45f));mic.setContentDescription("Fixed microphone icon");mic.setBackground(shape(editing.buttonColor(),0,true));sample.addView(mic,new LinearLayout.LayoutParams(px(d),px(d)));customization.addView(sample,new LinearLayout.LayoutParams(-1,px(126)));return;
         }
-        customization.addView(text("Button icon", 21, WHITE, true), new LinearLayout.LayoutParams(-1, px(30)));
-        LinearLayout choices = row(); customization.addView(choices);
-        for (int i = 0; i < FloatingConfig.ICONS.length; i++) {
-            final int value = i; LinearLayout tile = column(); tile.setGravity(Gravity.CENTER);
-            tile.setBackground(shape(SURFACE, editing.icon == i ? TEAL : LINE, false));
-            LinearLayout.LayoutParams tileSize = new LinearLayout.LayoutParams(0, px(96), 1f); if (i > 0) tileSize.leftMargin = px(8); choices.addView(tile, tileSize);
-            TextView glyph = symbol(FloatingConfig.ICONS[i], 37, editing.icon == i ? FloatingConfig.COLORS[editing.color] : WHITE);
-            tile.addView(glyph, new LinearLayout.LayoutParams(-1, px(48)));
-            TextView label = text(FloatingConfig.ICON_NAMES[i], 17, WHITE, false); label.setGravity(Gravity.CENTER); label.setMaxLines(2);
-            tile.addView(label, new LinearLayout.LayoutParams(-1, px(42)));
-            tile.setContentDescription("Icon " + FloatingConfig.ICON_NAMES[i]); tile.setOnClickListener(v -> { editing.icon = value; buildRows(); buildCustomization(); buildPreview(); });
-        }
+        customization.addView(text("Button icon",18,WHITE,true),new LinearLayout.LayoutParams(-1,px(28)));
+        for(int r=0;r<3;r++){LinearLayout grid=row();LinearLayout.LayoutParams rowSize=new LinearLayout.LayoutParams(-1,px(60));if(r>0)rowSize.topMargin=px(6);customization.addView(grid,rowSize);for(int c=0;c<4;c++){final int index=r*4+c;LinearLayout tile=column();tile.setGravity(Gravity.CENTER);tile.setBackground(shape(editing.icon==index?0xff113039:SURFACE,editing.icon==index?TEAL:LINE,false));LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,-1,1);if(c>0)p.leftMargin=px(6);grid.addView(tile,p);SoundIcon glyph=new SoundIcon(this,icons,index,false,px(28),editing.icon==index?editing.buttonColor():WHITE);tile.addView(glyph,new LinearLayout.LayoutParams(-1,px(30)));TextView label=text(FloatingConfig.ICON_NAMES[index],12,WHITE,false);label.setGravity(Gravity.CENTER);label.setMaxLines(2);tile.addView(label,new LinearLayout.LayoutParams(-1,px(28)));tile.setContentDescription("Icon "+FloatingConfig.ICON_NAMES[index]);tile.setOnClickListener(v->{editing.icon=index;buildRows();buildCustomization();});}}
     }
-    private void addPreview(String glyph, String label, int color, boolean live) {
-        float factor = Math.min(.62f, 88f / config.diameter(true));
-        int diameter = px(config.diameter(live) * factor);
-        int largest = px(config.diameter(true) * factor);
-        LinearLayout item = column(); item.setGravity(Gravity.CENTER);
-        int iconSize = Math.round(config.diameter(live) * factor * .45f);
-        TextView circle = symbol(glyph, iconSize, color == TEAL ? WHITE : BG); circle.setIncludeFontPadding(false); circle.setBackground(shape(color, 0, true));
-        LinearLayout.LayoutParams circlePosition = new LinearLayout.LayoutParams(diameter, diameter);
-        circlePosition.topMargin = (largest - diameter) / 2;
-        item.addView(circle, circlePosition);
-        TextView name = text(label, 12, WHITE, false); name.setGravity(Gravity.CENTER); name.setMaxLines(2);
-        LinearLayout.LayoutParams namePosition = new LinearLayout.LayoutParams(diameter, px(32));
-        namePosition.topMargin = (largest - diameter) / 2;
-        item.addView(name, namePosition);
-        LinearLayout.LayoutParams position = new LinearLayout.LayoutParams(diameter, -2);
-        position.leftMargin = preview.getChildCount() > 1 ? px(config.spacing * factor) : 0;
-        preview.addView(item, position);
+    private LinearLayout card(float weight){LinearLayout v=column();v.setPadding(px(18),px(16),px(18),px(16));v.setBackground(shape(SURFACE,LINE,false));LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,-1,weight);if(body.getChildCount()>0)p.leftMargin=px(18);body.addView(v,p);return v;}
+    private SeekBar slider(LinearLayout parent,String label,String description,int min,int max,int step,int value,String unit,java.util.function.IntConsumer changed){
+        LinearLayout line=row();parent.addView(line,new LinearLayout.LayoutParams(-1,px(43)));TextView caption=text(label,17,WHITE,true);caption.setMaxLines(2);line.addView(caption,new LinearLayout.LayoutParams(px(172),-1));SeekBar bar=new SeekBar(this);bar.setMax((max-min)/step);bar.setProgress((value-min)/step);bar.setProgressTintList(ColorStateList.valueOf(TEAL));bar.setThumbTintList(ColorStateList.valueOf(TEAL));bar.setContentDescription(description);line.addView(bar,new LinearLayout.LayoutParams(0,px(36),1));TextView out=text(value+unit,20,TEAL,true);line.addView(out,new LinearLayout.LayoutParams(px(62),-1));bar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){public void onStartTrackingTouch(SeekBar b){}public void onStopTrackingTouch(SeekBar b){}public void onProgressChanged(SeekBar b,int n,boolean user){int current=min+n*step;out.setText(current+unit);changed.accept(current);buildPreview();}});return bar;
     }
-    private void buildPreview() {
-        if (preview == null) return; preview.removeAllViews(); preview.setPadding(px(6), 0, px(6), 0); preview.setBackground(shape(SURFACE, LINE, false));
-        TextView grip = symbol("\ue25d", 24, MUTED); preview.addView(grip, new LinearLayout.LayoutParams(px(28), px(70)));
-        for (FloatingConfig.Item item : config.items) if (item.selected) addPreview(item.glyph(), item.name, item.buttonColor(), item.isLive());
-        preview.addView(symbol("\ue15b", 28, WHITE), new LinearLayout.LayoutParams(px(36), px(70)));
-        preview.addView(symbol("\ue5cd", 28, WHITE), new LinearLayout.LayoutParams(px(36), px(70)));
+    private void buildSizes(){
+        LinearLayout controls=card(1.15f);LinearLayout heading=row();heading.addView(text("Panel layout",21,WHITE,true),new LinearLayout.LayoutParams(0,px(34),1));TextView reset=button("Reset size",false);reset.setTextSize(TypedValue.COMPLEX_UNIT_PX,px(15));heading.addView(reset,new LinearLayout.LayoutParams(px(94),px(32)));controls.addView(heading,new LinearLayout.LayoutParams(-1,px(42)));
+        SeekBar base=slider(controls,"Button size","Floating button size",64,144,4,config.size,"px",n->config.size=n);reset.setOnClickListener(v->base.setProgress(6));
+        slider(controls,"Button spacing","Floating button spacing",0,40,1,config.spacing,"px",n->config.spacing=n);
+        slider(controls,"Enlarge Live Speak button","Live Speak button enlargement percent",0,100,1,config.micEnlargement,"%",n->config.micEnlargement=n);
+        TextView minimize=text("Minimize",19,WHITE,true);LinearLayout.LayoutParams minHeading=new LinearLayout.LayoutParams(-1,px(32));minHeading.topMargin=px(8);controls.addView(minimize,minHeading);
+        slider(controls,"Minimized button size","Minimized button size",64,144,4,config.minimizedSize,"px",n->config.minimizedSize=n);
+        LinearLayout auto=row();controls.addView(auto,new LinearLayout.LayoutParams(-1,px(44)));CheckBox on=new CheckBox(this);on.setText("Auto minimize");on.setTextColor(WHITE);on.setTypeface(font);on.setTextSize(TypedValue.COMPLEX_UNIT_PX,px(17));on.setButtonTintList(ColorStateList.valueOf(TEAL));on.setChecked(config.autoMinimize);auto.addView(on,new LinearLayout.LayoutParams(px(166),-1));
+        secondsInput=new EditText(this);secondsInput.setSingleLine(true);secondsInput.setPadding(px(8),0,px(8),0);secondsInput.setGravity(Gravity.CENTER_VERTICAL);secondsInput.setIncludeFontPadding(false);secondsInput.setBackground(shape(BG,LINE,false));secondsInput.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);secondsInput.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(4)});secondsInput.setText(secondsDraft);secondsInput.setTextColor(WHITE);secondsInput.setTypeface(font);secondsInput.setTextSize(TypedValue.COMPLEX_UNIT_PX,px(20));secondsInput.setContentDescription("Auto minimize time in seconds");secondsInput.setEnabled(config.autoMinimize);auto.addView(secondsInput,new LinearLayout.LayoutParams(px(80),px(40)));TextView unit=text("seconds",17,WHITE,false);unit.setPadding(px(12),0,0,0);auto.addView(unit);
+        on.setOnCheckedChangeListener((v,checked)->{config.autoMinimize=checked;secondsInput.setEnabled(checked);});secondsInput.addTextChangedListener(new android.text.TextWatcher(){public void beforeTextChanged(CharSequence s,int st,int c,int a){}public void afterTextChanged(android.text.Editable s){}public void onTextChanged(CharSequence s,int st,int before,int count){secondsDraft=s.toString();}});
+        controls.addView(text("Panel use restarts the inactivity timer.",13,MUTED,false),new LinearLayout.LayoutParams(-1,px(18)));
+        LinearLayout previews=card(1);previews.addView(text("Floating panel preview",21,WHITE,true),new LinearLayout.LayoutParams(-1,px(28)));preview=column();preview.setPadding(px(6),px(8),px(6),px(8));preview.setBackground(shape(SURFACE,LINE,false));LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,px(142));p.topMargin=px(10);previews.addView(preview,p);TextView title=text("Minimized button preview",17,WHITE,true);LinearLayout.LayoutParams titleSize=new LinearLayout.LayoutParams(-1,px(24));titleSize.topMargin=px(12);previews.addView(title,titleSize);minPreview=row();minPreview.setGravity(Gravity.CENTER);previews.addView(minPreview,new LinearLayout.LayoutParams(-1,px(96)));buildPreview();preview.post(this::buildPreview);
     }
-    private void save() {
-        try {
-            int percent = Integer.parseInt(micPercentDraft);
-            if (percent < 0 || percent > FloatingConfig.MAX_MIC_ENLARGEMENT) throw new NumberFormatException();
-            config.micEnlargement = percent;
-        } catch (NumberFormatException error) {
-            if (micPercentInput != null) micPercentInput.setError("Enter 0–100");
-            toast("Enter a Live Speak button enlargement from 0 to 100%."); return;
-        }
-        if (config.enabled && checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, MICROPHONE); return;
-        }
-        if (config.enabled && !Settings.canDrawOverlays(this)) {
-            new AlertDialog.Builder(this).setTitle("Display over other apps")
-                .setMessage("Allow Outer Voice to display the floating sound panel above other apps. Turn on Allow display over other apps, then return here.")
-                .setNegativeButton("Cancel", null).setPositiveButton("Open Settings", (dialog, which) -> {
-                    try { requestingOverlay = true; startActivityForResult(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName())), OVERLAY); }
-                    catch (RuntimeException e) { requestingOverlay = false; toast("Open Android Settings > Apps > Special access > Display over other apps > Outer Voice."); }
-                }).show(); return;
-        }
-        if (!config.save(this)) { toast("Could not save settings"); return; }
-        saved = true; FloatingConfig.prefs(this).edit().putBoolean("minimized", false).apply(); FloatingPanelService.sync(this, true); finish();
+    private void buildPreview(){
+        if(preview==null)return;preview.removeAllViews();LinearLayout tools=row();tools.addView(symbol("\ue25d",16,MUTED),new LinearLayout.LayoutParams(px(22),px(22)));TextView min=text("− Minimize",12,MUTED,false);min.setGravity(Gravity.CENTER);tools.addView(min,new LinearLayout.LayoutParams(0,px(22),1));tools.addView(symbol("\ue5cd",16,MUTED),new LinearLayout.LayoutParams(px(22),px(22)));preview.addView(tools);
+        int count=0,total=0;for(FloatingConfig.Item item:config.items)if(item.selected){if(count++>0)total+=config.spacing;total+=config.diameter(item.isLive());}
+        float available=preview.getWidth()>0?(preview.getWidth()-px(12))/scale:390;float factor=Math.min(.62f,Math.min(76f/config.diameter(true),available/Math.max(1,total)));int largest=px(config.diameter(true)*factor);
+        LinearLayout strip=row();strip.setGravity(Gravity.TOP);preview.addView(strip);
+        for(FloatingConfig.Item item:config.items)if(item.selected){int diameter=px(config.diameter(item.isLive())*factor);LinearLayout col=column();col.setGravity(Gravity.CENTER_HORIZONTAL);LinearLayout.LayoutParams pos=new LinearLayout.LayoutParams(diameter,-2);if(strip.getChildCount()>0)pos.leftMargin=px(config.spacing*factor);strip.addView(col,pos);SoundIcon circle=icon(item,Math.round(config.diameter(item.isLive())*factor*.45f));circle.setBackground(shape(item.buttonColor(),0,true));LinearLayout.LayoutParams circlePos=new LinearLayout.LayoutParams(diameter,diameter);circlePos.topMargin=(largest-diameter)/2;col.addView(circle,circlePos);TextView label=text(item.name,11,WHITE,false);label.setMaxLines(2);label.setGravity(Gravity.CENTER);LinearLayout.LayoutParams labelPos=new LinearLayout.LayoutParams(diameter,px(30));labelPos.topMargin=(largest-diameter)/2;col.addView(label,labelPos);}
+        minPreview.removeAllViews();int d=px(config.minimizedSize*.62f);SoundIcon bubble=icon(config.live(),Math.round(config.minimizedSize*.62f*.45f));bubble.setBackground(shape(config.live().buttonColor(),0,true));minPreview.addView(bubble,new LinearLayout.LayoutParams(d,d));LinearLayout notes=column();LinearLayout.LayoutParams noteSize=new LinearLayout.LayoutParams(-2,-2);noteSize.leftMargin=px(20);minPreview.addView(notes,noteSize);notes.addView(text(config.minimizedSize+"px",21,TEAL,true));notes.addView(text((config.liveOnly()?"Hold to speak":"Tap to reopen")+" · Drag to move",12,MUTED,false));
     }
-    @Override protected void onActivityResult(int request, int result, Intent data) {
-        super.onActivityResult(request, result, data);
-        if (request == OVERLAY) {
-            requestingOverlay = false;
-            if (Settings.canDrawOverlays(this)) save(); else toast("Floating panel needs Display over other apps permission. Settings have not been saved.");
-        }
+    private void save(){
+        try{int n=Integer.parseInt(secondsDraft);if(n<1||n>3600)throw new NumberFormatException();config.autoSeconds=n;}catch(NumberFormatException e){if(config.autoMinimize){sizeSelected=true;renderTab();secondsInput.setError("Enter 1–3600 seconds");secondsInput.requestFocus();toast("Enter an auto-minimize time from 1 to 3600 seconds.");return;}config.autoSeconds=30;}
+        if(config.enabled&&checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED){requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO},MICROPHONE);return;}
+        if(config.enabled&&!Settings.canDrawOverlays(this)){new AlertDialog.Builder(this).setTitle("Display over other apps").setMessage("Allow Outer Voice to display the floating sound panel above other apps. Turn on Allow display over other apps, then return here.").setNegativeButton("Cancel",null).setPositiveButton("Open Settings",(d,w)->{try{requestingOverlay=true;startActivityForResult(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,Uri.parse("package:"+getPackageName())),OVERLAY);}catch(RuntimeException e){requestingOverlay=false;toast("Open Android Settings > Apps > Special access > Display over other apps > Outer Voice.");}}).show();return;}
+        if(!config.save(this)){toast("Could not save settings");return;}saved=true;FloatingConfig.prefs(this).edit().putBoolean("minimized",false).apply();FloatingPanelService.sync(this,true);finish();
     }
-    @Override public void onRequestPermissionsResult(int request, String[] permissions, int[] results) {
-        super.onRequestPermissionsResult(request, permissions, results);
-        if (request == MICROPHONE) {
-            if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) save();
-            else toast("Microphone permission is required for floating Live Speak.");
-        }
-    }
-    private void cancel() { FloatingPanelService.sync(this, false); finish(); }
-    @Override public void onBackPressed() { cancel(); }
-    @Override protected void onSaveInstanceState(Bundle state) {
-        super.onSaveInstanceState(state);
-        org.json.JSONArray array = new org.json.JSONArray();
-        try {
-            for (FloatingConfig.Item item : config.items) {
-                org.json.JSONObject value = new org.json.JSONObject(); value.put("id", item.id); value.put("selected", item.selected); value.put("color", item.color); value.put("icon", item.icon); array.put(value);
-            }
-        } catch (Exception ignored) { }
-        state.putString("draft", array.toString()); state.putBoolean("enabled", config.enabled); state.putInt("size", config.size);
-        state.putInt("micEnlargement", config.micEnlargement); state.putString("micPercentDraft", micPercentDraft);
-        state.putInt("spacing", config.spacing);
-        state.putBoolean("requestingOverlay", requestingOverlay); if (editing != null) state.putString("editing", editing.id);
-    }
-    @Override protected void onDestroy() {
-        if (!saved && !isChangingConfigurations() && !requestingOverlay) FloatingPanelService.sync(this, false);
-        super.onDestroy();
-    }
+    @Override protected void onActivityResult(int request,int result,Intent data){super.onActivityResult(request,result,data);if(request==OVERLAY){requestingOverlay=false;if(Settings.canDrawOverlays(this))save();else toast("Floating panel needs Display over other apps permission. Settings have not been saved.");}}
+    @Override public void onRequestPermissionsResult(int request,String[] permissions,int[] results){super.onRequestPermissionsResult(request,permissions,results);if(request==MICROPHONE){if(results.length>0&&results[0]==PackageManager.PERMISSION_GRANTED)save();else toast("Microphone permission is required for floating Live Speak.");}}
+    private void cancel(){FloatingPanelService.sync(this,false);finish();}
+    @Override public void onBackPressed(){cancel();}
+    @Override protected void onSaveInstanceState(Bundle state){super.onSaveInstanceState(state);JSONArray array=new JSONArray();try{for(FloatingConfig.Item item:config.items){JSONObject v=new JSONObject();v.put("id",item.id);v.put("selected",item.selected);v.put("color",item.color);v.put("icon",item.icon);v.put("live_color",item.liveColor);array.put(v);}}catch(Exception ignored){}state.putString("draft",array.toString());state.putBoolean("enabled",config.enabled);state.putInt("size",config.size);state.putInt("spacing",config.spacing);state.putInt("enlargement",config.micEnlargement);state.putInt("minimizedSize",config.minimizedSize);state.putBoolean("autoMinimize",config.autoMinimize);state.putString("seconds",secondsDraft);state.putBoolean("sizeTab",sizeSelected);state.putBoolean("requestingOverlay",requestingOverlay);state.putString("editing",editing.id);}
+    @Override protected void onDestroy(){if(!saved&&!isChangingConfigurations()&&!requestingOverlay)FloatingPanelService.sync(this,false);super.onDestroy();}
 }

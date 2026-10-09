@@ -22,6 +22,14 @@ public class WavToolsTest {
         } finally { file.delete(); }
     }
     public static void main(String[] args) throws Exception {
+        for (int rate : new int[]{8000, 16000, 32000, 44100, 48000, 96000, 192000}) for (int channels : new int[]{1,2}) {
+            File adaptive = Files.createTempFile("voice-format", ".wav").toFile();
+            try {
+                try (RandomAccessFile out = new RandomAccessFile(adaptive,"rw")) { WavTools.header(out, channels * 8, rate, channels); out.write(new byte[channels * 8]); }
+                WavFormat format = WavFormat.read(adaptive);
+                if (format.rate != rate || format.channels != channels || format.bytes != channels * 8) throw new AssertionError("Adaptive capture metadata");
+            } finally { adaptive.delete(); }
+        }
         check(new short[]{0,0}, 1); check(new short[]{100,-100}, 16);
         check(new short[]{32767,-32768}, 1); check(new short[]{10000,-10000}, 32767 * .945 / 10000);
         byte[] pcm = {(byte)0xff,0x7f,0,(byte)0x80}; WavTools.amplify(pcm, 4, 16);
@@ -30,6 +38,6 @@ public class WavToolsTest {
         try (RandomAccessFile out = new RandomAccessFile(invalid, "rw")) {
             try { WavTools.header(out, 3); throw new AssertionError("Odd PCM accepted"); } catch (IOException expected) { }
         } finally { invalid.delete(); }
-        System.out.println("PASS recorded WAV header, silence, normalization ceiling, full-scale signed samples, clipping, invalid length");
+        System.out.println("PASS adaptive mono/stereo 8–192 kHz headers, silence, normalization ceiling, full-scale signed samples, clipping, invalid length");
     }
 }

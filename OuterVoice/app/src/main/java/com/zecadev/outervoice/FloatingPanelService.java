@@ -1,6 +1,9 @@
 package com.zecadev.outervoice;
 
 import android.Manifest;
+import android.animation.ValueAnimator;
+import android.app.AlertDialog;
+import android.view.animation.DecelerateInterpolator;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -36,7 +39,7 @@ import java.util.UUID;
 public final class FloatingPanelService extends Service {
     private static final String CHANNEL = "floating_panel", CLOSE = "close", REFRESH = "refresh";
     private final Handler main = new Handler();
-    private final WavRecorder recorder = new WavRecorder();
+    private final WavRecorder recorder = new WavRecorder(this);
     private WavPlayer player;
     private AudioManager audio;
     private AudioFocusRequest focus;
@@ -49,6 +52,17 @@ public final class FloatingPanelService extends Service {
     private TextView mic, status;
     private File temporary;
     private Typeface icons, font;
+    private FloatingConfig config;
+    private boolean minimized, transitioning, gestureActive, confirmingClose;
+    private final Runnable autoMinimize = () -> {
+        if (destroyed || minimized || panel == null || !config.autoMinimize) return;
+        if (holding || recorder.active() || player.active() || gestureActive || transitioning || confirmingClose) main.postDelayed(this.autoMinimize, 250);
+        else transitionPanel(true);
+    };
+    private void armAutoMinimize() {
+        main.removeCallbacks(autoMinimize);
+        if (!destroyed && panel != null && !minimized && config.autoMinimize) main.postDelayed(autoMinimize, config.autoSeconds * 1000L);
+    }
 
     static void sync(Context context, boolean refresh) {
         if (!FloatingConfig.prefs(context).getBoolean("enabled", false)) {
@@ -60,7 +74,7 @@ public final class FloatingPanelService extends Service {
         try { context.startForegroundService(intent); }
         catch (RuntimeException e) {
             AudioDiagnostics.log("Floating service start: " + e.getMessage());
-            Toast.makeText(context, "Could not open floating panel. Open Floating Buttons to try again.", Toast.LENGTH_LONG).show();
+            Toast.makeText(context, "Could not open floating panel. Open Floating Panel to try again.", Toast.LENGTH_LONG).show();
         }
     }
     @Override public IBinder onBind(Intent intent) { return null; }
@@ -119,129 +133,89 @@ public final class FloatingPanelService extends Service {
         if (circle) drawable.setShape(GradientDrawable.OVAL); else drawable.setCornerRadius(16);
         return drawable;
     }
-    private LinearLayout circle(String symbol, String label, int color, String description, int diameter, int largest) {
+    private LinearLayout circle(FloatingConfig.Item item, int diameter, int largest) {
         LinearLayout column = new LinearLayout(this); column.setOrientation(LinearLayout.VERTICAL); column.setGravity(Gravity.CENTER);
-        int iconSize = Math.round(diameter * .45f);
-        TextView button = text(symbol, iconSize, color == FloatingConfig.TEAL ? 0xfff6f9fa : 0xff0f171c);
-        button.setIncludeFontPadding(false);
-        button.setTypeface(icons); button.setBackground(shape(color, true)); button.setContentDescription(description);
+        SoundIcon button = new SoundIcon(this, icons, item.icon, item.isLive(), Math.round(diameter * .45f), item.foreground());
+        button.setBackground(shape(item.buttonColor(), true)); button.setContentDescription(item.isLive() ? "Hold Live Speak to record; release to play" : "Play " + item.name);
         button.setClickable(true); button.setFocusable(true);
-        column.addView(button, new LinearLayout.LayoutParams(diameter, diameter));
-        LinearLayout.LayoutParams buttonPosition = (LinearLayout.LayoutParams)button.getLayoutParams();
-        buttonPosition.topMargin = (largest - diameter) / 2;
-        TextView name = text(label, Math.max(12, Math.min(17, size / 6)), 0xfff6f9fa); name.setMaxLines(2);
-        LinearLayout.LayoutParams namePosition = new LinearLayout.LayoutParams(diameter, 34);
-        namePosition.topMargin = (largest - diameter) / 2;
-        column.addView(name, namePosition);
+        LinearLayout.LayoutParams position = new LinearLayout.LayoutParams(diameter, diameter); position.topMargin = (largest - diameter) / 2; column.addView(button, position);
+        TextView name = text(item.name, Math.max(12, Math.min(17, size / 6)), 0xfff6f9fa); name.setMaxLines(2);
+        LinearLayout.LayoutParams label = new LinearLayout.LayoutParams(diameter, 34); label.topMargin = (largest - diameter) / 2; column.addView(name, label);
         return column;
     }
+    private GradientDrawable controlShape(int color, int border) { GradientDrawable d = shape(color, false); d.setCornerRadius(9); d.setStroke(1, border); return d; }
     private void buildPanel() {
-        if (panel != null) { windows.removeView(panel); panel = null; }
+        main.removeCallbacks(autoMinimize); transitioning = false; gestureActive = false;
+        if (panel != null) { panel.animate().cancel(); windows.removeView(panel); panel = null; }
         mic = null; status = null;
-        FloatingConfig config = FloatingConfig.load(this); size = config.size; micEnlargement = config.micEnlargement;
-        DisplayMetrics metrics = new DisplayMetrics(); windows.getDefaultDisplay().getRealMetrics(metrics);
-        screenW = metrics.widthPixels; screenH = metrics.heightPixels;
-        if (FloatingConfig.prefs(this).getBoolean("minimized", false)) { buildBubble(); return; }
-        int largest = config.diameter(true);
-        LinearLayout content = new LinearLayout(this); content.setOrientation(LinearLayout.VERTICAL);
-        content.setPadding(8, 8, 8, 6); content.setBackground(shape(0xff182329, false));
-        LinearLayout buttons = row(); content.addView(buttons);
-        TextView grip = text("\ue25d", 26, 0xffaebcc7); grip.setTypeface(icons); grip.setContentDescription("Move floating panel");
-        buttons.addView(grip, new LinearLayout.LayoutParams(36, largest + 34));
-        int count = 0, total = 0;
+        config = FloatingConfig.load(this); size = config.size; micEnlargement = config.micEnlargement;
+        DisplayMetrics metrics = new DisplayMetrics(); windows.getDefaultDisplay().getRealMetrics(metrics); screenW = metrics.widthPixels; screenH = metrics.heightPixels;
+        minimized = FloatingConfig.prefs(this).getBoolean("minimized", false);
+        if (minimized) { buildBubble(); return; }
+        int largest = config.diameter(true), count = 0, total = 0;
         for (FloatingConfig.Item item : config.items) if (item.selected) { if (count++ > 0) total += config.spacing; total += config.diameter(item.isLive()); }
-        int fixedWidth = 16 + 36 + 88;
-        int soundWidth = Math.min(total, Math.max(0, screenW - 16 - fixedWidth));
-        if (count > 0) {
-            HorizontalScrollView scroll = new HorizontalScrollView(this); scroll.setHorizontalScrollBarEnabled(total > soundWidth);
-            LinearLayout saved = row(); scroll.addView(saved);
-            for (FloatingConfig.Item item : config.items) if (item.selected) {
-                int diameter = config.diameter(item.isLive());
-                LinearLayout sound = circle(item.glyph(), item.name, item.buttonColor(), item.isLive() ? "Hold Live Speak to record; release to play" : "Play " + item.name, diameter, largest);
-                LinearLayout.LayoutParams layout = new LinearLayout.LayoutParams(diameter, largest + 34); layout.leftMargin = saved.getChildCount() > 0 ? config.spacing : 0;
-                saved.addView(sound, layout);
-                if (item.isLive()) {
-                    mic = (TextView) sound.getChildAt(0);
-                    mic.setOnTouchListener((view, event) -> {
-                        switch (event.getActionMasked()) {
-                            case MotionEvent.ACTION_DOWN:
-                                view.getParent().requestDisallowInterceptTouchEvent(true); beginRecording(); return true;
-                            case MotionEvent.ACTION_UP:
-                                view.getParent().requestDisallowInterceptTouchEvent(false);
-                                if (holding) { holding = false; recorder.stop(); show("Saving WAV…"); mic.setAlpha(1f); }
-                                return true;
-                            case MotionEvent.ACTION_CANCEL:
-                                view.getParent().requestDisallowInterceptTouchEvent(false); cancelAudio(); show("Recording cancelled"); return true;
-                            default: return true;
-                        }
-                    });
-                } else sound.getChildAt(0).setOnClickListener(v -> playSound(item));
+        final int width = Math.min(screenW - 16, Math.max(252, total + 30));
+        LinearLayout content = new LinearLayout(this) {
+            @Override public boolean dispatchTouchEvent(MotionEvent event) {
+                if (transitioning) return true;
+                if (event.getActionMasked() == MotionEvent.ACTION_DOWN) { gestureActive = true; main.removeCallbacks(autoMinimize); }
+                boolean result = super.dispatchTouchEvent(event);
+                if (event.getActionMasked() == MotionEvent.ACTION_UP || event.getActionMasked() == MotionEvent.ACTION_CANCEL) { gestureActive = false; armAutoMinimize(); }
+                return result;
             }
-            buttons.addView(scroll, new LinearLayout.LayoutParams(soundWidth, largest + 34));
+        };
+        content.setOrientation(LinearLayout.VERTICAL); content.setPadding(14, 10, 14, 8); content.setBackground(controlShape(0xff182329, 0xff30414a));
+        LinearLayout toolbar = row(); LinearLayout.LayoutParams toolbarSize = new LinearLayout.LayoutParams(-1,72); toolbarSize.bottomMargin = 14; toolbar.setPadding(0,0,0,10); content.addView(toolbar,toolbarSize);
+        TextView grip = text("\ue25d",32,0xffaebcc7); grip.setTypeface(icons); grip.setBackground(controlShape(0xff182329,0xff30414a)); grip.setContentDescription("Move floating panel"); toolbar.addView(grip,new LinearLayout.LayoutParams(60,60));
+        LinearLayout minimize = row(); minimize.setGravity(Gravity.CENTER); minimize.setBackground(controlShape(0xff113039,FloatingConfig.TEAL)); minimize.setContentDescription("Minimize floating panel"); minimize.setClickable(true); minimize.setFocusable(true);
+        TextView minIcon = text("\ue15b",30,FloatingConfig.TEAL); minIcon.setTypeface(icons); minimize.addView(minIcon,new LinearLayout.LayoutParams(30,60));
+        if(width>=360){TextView label=text("Minimize",22,FloatingConfig.TEAL);label.setPadding(12,0,0,0);minimize.addView(label);}
+        LinearLayout.LayoutParams middle=new LinearLayout.LayoutParams(0,60,1);middle.setMargins(16,0,16,0);toolbar.addView(minimize,middle);minimize.setOnClickListener(v->transitionPanel(true));
+        TextView close=text("\ue5cd",32,0xfff6f9fa);close.setTypeface(icons);close.setBackground(controlShape(0xff182329,0xff30414a));close.setContentDescription("Close floating panel");toolbar.addView(close,new LinearLayout.LayoutParams(60,60));close.setOnClickListener(v->confirmClose());
+        HorizontalScrollView scroll=new HorizontalScrollView(this);scroll.setFillViewport(true);scroll.setHorizontalScrollBarEnabled(total>width-28);LinearLayout strip=row();strip.setGravity(count==1?Gravity.CENTER:Gravity.LEFT|Gravity.CENTER_VERTICAL);scroll.addView(strip);content.addView(scroll,new LinearLayout.LayoutParams(width-28,largest+34));
+        for(FloatingConfig.Item item:config.items)if(item.selected){int d=config.diameter(item.isLive());LinearLayout sound=circle(item,d,largest);LinearLayout.LayoutParams pos=new LinearLayout.LayoutParams(d,largest+34);if(strip.getChildCount()>0)pos.leftMargin=config.spacing;strip.addView(sound,pos);
+            if(item.isLive()){mic=(TextView)sound.getChildAt(0);mic.setOnTouchListener((view,event)->{switch(event.getActionMasked()){
+                case MotionEvent.ACTION_DOWN:view.getParent().requestDisallowInterceptTouchEvent(true);beginRecording();return true;
+                case MotionEvent.ACTION_UP:view.getParent().requestDisallowInterceptTouchEvent(false);finishRecording();return true;
+                case MotionEvent.ACTION_CANCEL:view.getParent().requestDisallowInterceptTouchEvent(false);cancelAudio();show("Recording cancelled");return true;
+                default:return true;}});
+            }else sound.getChildAt(0).setOnClickListener(v->playSound(item));
         }
-        TextView minimize = text("\ue15b", 26, 0xfff6f9fa); minimize.setTypeface(icons); minimize.setContentDescription("Minimize floating panel");
-        minimize.setOnClickListener(v -> { cancelAudio(); FloatingConfig.prefs(this).edit().putBoolean("minimized", true).commit(); buildPanel(); });
-        buttons.addView(minimize, new LinearLayout.LayoutParams(44, 48));
-        TextView close = text("\ue5cd", 26, 0xfff6f9fa); close.setTypeface(icons); close.setContentDescription("Close floating panel");
-        close.setOnClickListener(v -> closePanel()); buttons.addView(close, new LinearLayout.LayoutParams(44, 48));
-        status = text("Hold Live Speak; release to play", 12, 0xffaebcc7); status.setMaxLines(1);
-        content.addView(status, new LinearLayout.LayoutParams(-1, 20));
-        panel = content;
-        params = new WindowManager.LayoutParams(fixedWidth + soundWidth, largest + 68,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN, PixelFormat.TRANSLUCENT);
-        params.gravity = Gravity.TOP | Gravity.LEFT;
-        // Android 12 permits touches outside a translucent overlay at this opacity.
-        params.alpha = .8f;
-        params.x = FloatingConfig.prefs(this).getInt("x", 24);
-        params.y = FloatingConfig.prefs(this).getInt("y", Math.max(0, screenH - params.height - 24));
-        clamp(); windows.addView(panel, params);
-        grip.setOnTouchListener(new View.OnTouchListener() {
-            float downX, downY; int startX, startY;
-            @Override public boolean onTouch(View view, MotionEvent event) {
-                switch (event.getActionMasked()) {
-                    case MotionEvent.ACTION_DOWN:
-                        cancelAudio(); downX = event.getRawX(); downY = event.getRawY(); startX = params.x; startY = params.y; return true;
-                    case MotionEvent.ACTION_MOVE:
-                        params.x = startX + Math.round(event.getRawX() - downX); params.y = startY + Math.round(event.getRawY() - downY);
-                        clamp(); windows.updateViewLayout(panel, params); return true;
-                    case MotionEvent.ACTION_UP:
-                    case MotionEvent.ACTION_CANCEL:
-                        FloatingConfig.prefs(FloatingPanelService.this).edit().putInt("x", params.x).putInt("y", params.y).apply(); return true;
-                    default: return true;
-                }
-            }
-        });
+        status=text("Hold Live Speak; release to play",12,0xffaebcc7);status.setMaxLines(1);content.addView(status,new LinearLayout.LayoutParams(-1,20));panel=content;
+        params=new WindowManager.LayoutParams(width,largest+158,WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,PixelFormat.TRANSLUCENT);params.gravity=Gravity.TOP|Gravity.LEFT;params.alpha=.8f;
+        params.x=FloatingConfig.prefs(this).getInt("x",24);params.y=FloatingConfig.prefs(this).getInt("y",Math.max(0,screenH-params.height-24));clamp();windows.addView(panel,params);
+        grip.setOnTouchListener(new View.OnTouchListener(){float x,y;int startX,startY;public boolean onTouch(View v,MotionEvent e){switch(e.getActionMasked()){
+            case MotionEvent.ACTION_DOWN:cancelAudio();x=e.getRawX();y=e.getRawY();startX=params.x;startY=params.y;return true;
+            case MotionEvent.ACTION_MOVE:params.x=startX+Math.round(e.getRawX()-x);params.y=startY+Math.round(e.getRawY()-y);clamp();windows.updateViewLayout(panel,params);return true;
+            case MotionEvent.ACTION_UP:case MotionEvent.ACTION_CANCEL:FloatingConfig.prefs(FloatingPanelService.this).edit().putInt("x",params.x).putInt("y",params.y).apply();return true;
+            default:return true;}}});armAutoMinimize();
     }
     private void buildBubble() {
-        TextView bubble = text(FloatingConfig.MIC_ICON, 30, 0xfff6f9fa); bubble.setTypeface(icons);
-        bubble.setIncludeFontPadding(false); bubble.setBackground(shape(FloatingConfig.TEAL, true));
-        bubble.setContentDescription("Reopen floating panel; drag to move"); bubble.setClickable(true);
-        panel = bubble;
-        params = new WindowManager.LayoutParams(60, 60, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN, PixelFormat.TRANSLUCENT);
-        params.gravity = Gravity.TOP | Gravity.LEFT; params.alpha = .8f;
-        params.x = FloatingConfig.prefs(this).getInt("bubble_x", FloatingConfig.prefs(this).getInt("x", 24));
-        params.y = FloatingConfig.prefs(this).getInt("bubble_y", FloatingConfig.prefs(this).getInt("y", 24));
-        clamp(); windows.addView(panel, params);
-        bubble.setOnClickListener(v -> { FloatingConfig.prefs(this).edit().putBoolean("minimized", false).commit(); buildPanel(); });
-        bubble.setOnTouchListener(new View.OnTouchListener() {
-            float x, y; int startX, startY; boolean moved;
-            public boolean onTouch(View view, MotionEvent event) {
-                switch (event.getActionMasked()) {
-                    case MotionEvent.ACTION_DOWN: x = event.getRawX(); y = event.getRawY(); startX = params.x; startY = params.y; moved = false; return true;
-                    case MotionEvent.ACTION_MOVE:
-                        if (Math.abs(event.getRawX() - x) > 8 || Math.abs(event.getRawY() - y) > 8) moved = true;
-                        if (moved) { params.x = startX + Math.round(event.getRawX() - x); params.y = startY + Math.round(event.getRawY() - y); clamp(); windows.updateViewLayout(panel, params); }
-                        return true;
-                    case MotionEvent.ACTION_UP:
-                        if (!moved) view.performClick();
-                        else FloatingConfig.prefs(FloatingPanelService.this).edit().putInt("bubble_x", params.x).putInt("bubble_y", params.y).apply();
-                        return true;
-                    case MotionEvent.ACTION_CANCEL: return true;
-                    default: return true;
-                }
-            }
-        });
+        int d=config.minimizedSize;boolean speak=config.liveOnly();
+        SoundIcon bubble=new SoundIcon(this,icons,0,true,Math.round(d*.45f),config.live().foreground());bubble.setBackground(shape(config.live().buttonColor(),true));bubble.setContentDescription(speak?"Hold Live Speak directly; release to play; drag to move":"Reopen floating panel; drag to move");bubble.setClickable(true);bubble.setFocusable(true);panel=bubble;if(speak)mic=bubble;
+        params=new WindowManager.LayoutParams(d,d,WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,PixelFormat.TRANSLUCENT);params.gravity=Gravity.TOP|Gravity.LEFT;params.alpha=.8f;
+        params.x=FloatingConfig.prefs(this).getInt("bubble_x",FloatingConfig.prefs(this).getInt("x",24));params.y=FloatingConfig.prefs(this).getInt("bubble_y",FloatingConfig.prefs(this).getInt("y",24));clamp();windows.addView(panel,params);
+        if(!speak)bubble.setOnClickListener(v->transitionPanel(false));
+        bubble.setOnTouchListener(new View.OnTouchListener(){float x,y;int startX,startY;boolean moved;public boolean onTouch(View v,MotionEvent e){if(transitioning)return true;switch(e.getActionMasked()){
+            case MotionEvent.ACTION_DOWN:x=e.getRawX();y=e.getRawY();startX=params.x;startY=params.y;moved=false;if(speak)beginRecording();return true;
+            case MotionEvent.ACTION_MOVE:if(!moved&&Math.hypot(e.getRawX()-x,e.getRawY()-y)>8){moved=true;if(speak)cancelAudio();}if(moved){params.x=startX+Math.round(e.getRawX()-x);params.y=startY+Math.round(e.getRawY()-y);clamp();windows.updateViewLayout(panel,params);}return true;
+            case MotionEvent.ACTION_UP:if(!moved){if(speak)finishRecording();else v.performClick();}else saveBubblePosition();return true;
+            case MotionEvent.ACTION_CANCEL:if(speak)cancelAudio();if(moved)saveBubblePosition();return true;
+            default:return true;}}});
+    }
+    private void saveBubblePosition(){FloatingConfig.prefs(this).edit().putInt("bubble_x",params.x).putInt("bubble_y",params.y).apply();}
+    private void finishRecording(){if(holding){holding=false;recorder.stop();HoldFeedback.stop(mic);show("Saving WAV…");}armAutoMinimize();}
+    private void transitionPanel(boolean minimize){
+        if(transitioning||panel==null)return;cancelAudio();main.removeCallbacks(autoMinimize);transitioning=true;
+        int d=config.minimizedSize;long duration=ValueAnimator.areAnimatorsEnabled()?320:0;
+        if(minimize){int x=Math.max(0,Math.min(screenW-d,FloatingConfig.prefs(this).getInt("bubble_x",params.x))),y=Math.max(0,Math.min(screenH-d,FloatingConfig.prefs(this).getInt("bubble_y",params.y)));
+            panel.setPivotX(0);panel.setPivotY(0);panel.animate().scaleX(d/(float)params.width).scaleY(d/(float)params.height).translationX(x-params.x).translationY(y-params.y).alpha(0).setDuration(duration).setInterpolator(new DecelerateInterpolator()).withEndAction(()->{if(destroyed)return;FloatingConfig.prefs(this).edit().putBoolean("minimized",true).putInt("bubble_x",x).putInt("bubble_y",y).commit();buildPanel();panel.setAlpha(0);panel.animate().alpha(1).setDuration(ValueAnimator.areAnimatorsEnabled()?140:0).start();}).start();
+        }else{int x=params.x,y=params.y;FloatingConfig.prefs(this).edit().putBoolean("minimized",false).commit();buildPanel();transitioning=true;panel.setPivotX(0);panel.setPivotY(0);panel.setScaleX(d/(float)params.width);panel.setScaleY(d/(float)params.height);panel.setTranslationX(x-params.x);panel.setTranslationY(y-params.y);panel.setAlpha(0);panel.animate().scaleX(1).scaleY(1).translationX(0).translationY(0).alpha(1).setDuration(duration).setInterpolator(new DecelerateInterpolator()).withEndAction(()->{transitioning=false;armAutoMinimize();}).start();}
+    }
+    private void confirmClose(){
+        cancelAudio();main.removeCallbacks(autoMinimize);confirmingClose=true;
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Close floating panel?").setMessage("You can enable it again in Floating Panel settings.").setNegativeButton("Cancel",null).setPositiveButton("Close panel",(d,w)->closePanel()).create();
+        dialog.getWindow().setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY);dialog.setOnDismissListener(d->{confirmingClose=false;armAutoMinimize();});dialog.show();
     }
     private void clamp() {
         params.x = Math.max(0, Math.min(params.x, Math.max(0, screenW - params.width)));
@@ -265,7 +239,7 @@ public final class FloatingPanelService extends Service {
         cancelAudio();
         int token = epoch;
         if (!acquireFocus()) return;
-        holding = true; mic.setAlpha(.65f); show("Recording • release to play");
+        holding = true; HoldFeedback.start(mic); show("Recording • release to play");
         File file = new File(getCacheDir(), "floating-voice-" + UUID.randomUUID() + ".wav");
         recorder.start(file, new WavRecorder.Listener() {
             @Override public void meter(double level, long milliseconds) { main.post(() -> {
@@ -273,7 +247,7 @@ public final class FloatingPanelService extends Service {
             }); }
             @Override public void done(File completed, String error) { main.post(() -> {
                 if (destroyed || token != epoch) { if (completed != null) completed.delete(); return; }
-                holding = false; mic.setAlpha(1f);
+                holding = false; HoldFeedback.stop(mic);
                 if (error != null || completed == null) { releaseFocus(); show(error == null ? "Recording cancelled" : error); return; }
                 temporary = completed;
                 try {
@@ -303,16 +277,19 @@ public final class FloatingPanelService extends Service {
             player.play(file, error -> main.post(() -> {
                 if (destroyed || token != epoch) return;
                 releaseFocus(); show(error == null ? "Hold Live Speak; release to play" : error);
-                deleteTemporary();
+                deleteTemporary(); armAutoMinimize();
             }));
         } catch (RuntimeException e) { releaseFocus(); AudioDiagnostics.log("Floating playback: " + e.getMessage()); show(e.getMessage()); deleteTemporary(); }
     }
     private void deleteTemporary() { if (temporary != null) temporary.delete(); temporary = null; }
     private void cancelAudio() {
         epoch++; holding = false; recorder.cancel(); player.stop(); releaseFocus(); deleteTemporary();
-        if (mic != null) mic.setAlpha(1f);
+        HoldFeedback.stop(mic);
     }
-    private void show(String message) { if (status != null) status.setText(message == null ? "Audio failed" : message); }
+    private void show(String message) {
+        if (status != null) status.setText(message == null ? "Audio failed" : message);
+        else if (message != null && !message.startsWith("Recording") && !message.startsWith("Saving") && !message.startsWith("Playing") && !message.startsWith("Hold")) Toast.makeText(this,message,Toast.LENGTH_LONG).show();
+    }
     private void closePanel() {
         FloatingConfig.prefs(this).edit().putBoolean("enabled", false).putBoolean("minimized", false).apply(); stopSelf();
     }
@@ -320,7 +297,7 @@ public final class FloatingPanelService extends Service {
         super.onConfigurationChanged(config); cancelAudio(); buildPanel();
     }
     @Override public void onDestroy() {
-        destroyed = true; cancelAudio();
+        destroyed = true; main.removeCallbacksAndMessages(null); cancelAudio();
         if (panel != null) { try { windows.removeView(panel); } catch (RuntimeException ignored) { } panel = null; }
         stopForeground(true); super.onDestroy();
     }

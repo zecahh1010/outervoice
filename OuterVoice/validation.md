@@ -1,5 +1,7 @@
 # Build and validation
 
+Latest release: **v1.4.0, build 8**, Android 9/API 28 minimum. Earlier sections below retain historical evidence; the v1.4.0 section at the end records the approved simulator changes.
+
 Deliverable: OuterVoice-1.1.0.apk, version 1.1.0 (2), package com.zecadev.outervoice, Android 9/API 28 minimum. APK size: 738441 bytes.
 
 SHA-256: `f3ee54d1c0ead97d5f6a697bcdfa30516fe58c33033ef023af23e644baf70d60`.
@@ -85,3 +87,25 @@ These checks use the local Android 9 emulator, not the vehicle. Audible BUS12 ou
 - Replacing an imported clip clears the previous pending clip first, so a failed replacement cannot leave Play targeting stale audio.
 - The final UI check verifies visible settings helper text, the home touch/ripple and Exit controls, and minimized-state restart/reopen across status-bar and fullscreen screens. Overlay windows use absolute screen coordinates to avoid24px inset shifts.
 - Failed replacement after a successful MP3 import is tested: stale pending audio is removed and Play becomes disabled. The draft cancels cleanly. Final48px percentage input and preview label padding are checked in the rebuilt APK.
+
+## v1.4.0 — approved UI revisions (2026-10-09)
+
+Final signed APK: `dist/OuterVoice-1.4.0.apk`, version 1.4.0 (8), 771212 bytes. SHA256: `b2dc91aa4cd4f4324c2e77cdf234463435368d3b1ff3c9d2a9ce6f0aa404f51a`. Signature and alignment pass with the retained certificate `664b72c9d4c6075814ffa1c9b72a2d0c78132238fbed9d6b2265b78a7614a17e`. Update installation succeeds on Android 9 with existing saved sounds retained.
+
+Pure Java WAV parser/writer/normalization and PCM import tests pass. New header checks cover mono/stereo rates from 8–192 kHz. Android microphone capture chooses a supported format instead of requiring 44.1 kHz mono PCM16 input. Emulator diagnostics verify 48000 Hz, two channels and float capture (`input encoding=4`); actual recorded files contain nonzero PCM16 WAV frames at the captured rate/channel count. PCM16 remains the storage format used by the existing player. The 180-second cap remains.
+
+Native acceptance checks at 1024 × 600 verify:
+
+- Two Floating Panel tabs, six visible ordering entries, warm-to-cool ten-color palette, separate default App Blue option, fixed Live Speak microphone, twelve icon choices, enlargement moved above minimized size, and settings/previews fitting without a settings scrollbar. Draft values survive tab switches; Cancel preserves the original preferences exactly.
+- Persisted custom Live Speak color, icon and minimized size; real `APPLICATION_OVERLAY` windows above Android Settings on display 0. Idle auto-minimize and multi-button reopen work. A 5-second timeout cannot interrupt a 9-second hold, and the panel minimizes after release.
+- Separated toolbar controls, close confirmation/Cancel, manual minimize/reopen, saved positions and minimized state across process restart. With only Live Speak selected, the bubble records directly without expanding; dragging cancels and persists its new position.
+- Maximum 144 px base/100% enlargement produces a 288 px Live Speak circle; separate minimized size reaches 144 px. The animation-enabled pixel check measures a 132 px button pulsing through widths including 116 px, then returning to 132 px. Disabled system animations use the static halo; the test restores the emulator animation setting.
+- Live Speak is reordered from third to first. With all six buttons selected, the maximum-width overlay is 1008 × 446 px above Android Settings. Its Minimize control fills the available toolbar width, sounds scroll horizontally, and minimize/reopen restores its full frame.
+- Add Sound has a clear 60 px Play control, no duplicate Browse action and no fixed capture specification. A disposable sixth recorded sound confirms all six Home/Edit rows fit. Confirmed deletion remains staged until Save Changes, removes only that fixture and preserves all five originals. Exit disables the overlay and removes the active service/task; service removal was verified after its asynchronous shutdown.
+- The final APK imports 48 kHz stereo PCM24 WAV, MP3 and MP3 content with a `.bin` extension, converts to the playback format and enables Play. Preview requests reject missing BUS12 clearly. A damaged WAV disables Play and reports the decoder error. Cancel removes pending imports and preserves existing sounds. Android picker packages are restored after testing.
+
+Import regression exposed Android's generic GET_CONTENT fallback resolving to an images-only gallery. The final build uses OPEN_DOCUMENT for any extension and opens the built-in file browser directly if that picker is absent; the corrected fallback is exercised above. No AndroidRuntime fatal crash is observed.
+
+Evidence: `qa/check-v140.py`, `qa/check-v140-extra.py`, native `qa/v140-*` PNG/XML snapshots and the approved `web-simulator/` reference. Android 9 accessibility sometimes omits non-focusable overlays or returns null/idle errors; tests use window geometry and retry fresh snapshots. Continuously updating recording status is stopped before idle snapshots, and Exit allows a bounded service-shutdown wait.
+
+Physical head-unit checks remain necessary for audible BUS12 output, microphone quality, firmware routing/codec support, latency, feedback and newer-Android permission behavior. The emulator verifies capture and playback requests, not external amplifier sound.
