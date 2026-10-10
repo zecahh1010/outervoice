@@ -17,7 +17,7 @@ final class FloatingConfig {
     // The first three retain their old indices. Further icons use local vector drawing.
     static final String[] ICONS = {"\ue814", "\ue87d", "\ue7f4", "", "", "", "", "", "", "", "", ""};
     static final String[] ICON_NAMES = {"Angry", "Thank You", "Warmly Remind", "Funny", "Extreme Angry", "Happy", "Friendly", "Sorry", "Surprised", "Calm", "Urgent", "Celebration"};
-    static final int DEFAULT_SIZE = 88, MIN_SIZE = 64, MAX_SIZE = 144;
+    static final int DEFAULT_SIZE = 88, MIN_SIZE = 64, MAX_SIZE = 200;
     static final String LIVE_ID = "live-speak", MIC_ICON = "\ue029";
     static final int DEFAULT_MIC_ENLARGEMENT = 50, MAX_MIC_ENLARGEMENT = 100;
     boolean enabled;

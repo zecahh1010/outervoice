@@ -632,14 +632,34 @@ public class MainActivity extends Activity {
     }
     private void chooseWav() {
         if (recorder.active() || importing) { toast("Stop recording or wait for import first"); return; }
-        // A generic GET_CONTENT fallback may resolve to an images-only gallery.
-        // OPEN_DOCUMENT accepts any extension; absent file pickers use our browser.
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*");
         intent.addCategory(Intent.CATEGORY_OPENABLE); intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         try { startActivityForResult(intent, WAV_REQUEST); return; }
         catch (android.content.ActivityNotFoundException e) { AudioDiagnostics.log("File picker absent"); }
         catch (RuntimeException e) { AudioDiagnostics.log("File picker failed: " + e.getMessage()); }
-        browseFiles(null);
+        // Some head units expose a file manager only through GET_CONTENT. Require
+        // arbitrary-file support so an images-only gallery cannot take over import.
+        Intent content = new Intent(Intent.ACTION_GET_CONTENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        Intent arbitrary = new Intent(content).setType("application/octet-stream");
+        ArrayList<Intent> choices = new ArrayList<>();
+        for (android.content.pm.ResolveInfo candidate : getPackageManager().queryIntentActivities(content, PackageManager.MATCH_DEFAULT_ONLY)) {
+            for (android.content.pm.ResolveInfo supported : getPackageManager().queryIntentActivities(arbitrary, PackageManager.MATCH_DEFAULT_ONLY)) {
+                if (candidate.activityInfo.packageName.equals(supported.activityInfo.packageName) && candidate.activityInfo.name.equals(supported.activityInfo.name)) {
+                    choices.add(new Intent(content).setComponent(new android.content.ComponentName(candidate.activityInfo.packageName, candidate.activityInfo.name)));break;
+                }
+            }
+        }
+        if (!choices.isEmpty()) {
+            Intent picker = Intent.createChooser(choices.remove(0), "Import Sound");
+            if (!choices.isEmpty()) picker.putExtra(Intent.EXTRA_INITIAL_INTENTS, choices.toArray(new Intent[0]));
+            try { startActivityForResult(picker, WAV_REQUEST); return; }
+            catch (RuntimeException e) { AudioDiagnostics.log("Compatible file picker failed: " + e.getMessage()); }
+        }
+        new AlertDialog.Builder(this).setTitle("Android file picker unavailable")
+                .setMessage("No working Android file picker is available on this device. Enable a file picker in Android Settings, or choose Browse files to use Outer Voice's built-in browser.")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Android Settings", (d,w)->{try{startActivity(new Intent(android.provider.Settings.ACTION_SETTINGS));}catch(RuntimeException e){toast("Android Settings unavailable");}})
+                .setNeutralButton("Browse files", (d,w)->browseFiles(null)).show();
     }
     private void browseFiles(File directory) {
         if (recorder.active() || importing || !"add".equals(page)) { toast("Stop recording or wait for import first"); return; }

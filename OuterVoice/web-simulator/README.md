@@ -41,3 +41,8 @@ Holding Live Speak now gently presses the button inward and shows a breathing in
 The hold motion is now stronger: the entire button and microphone pulse between 88% and 100% scale every second, paired with a brighter 4px inset ring. Releasing or cancelling eases from the current pulse size back to full size over 220ms. Reduced-motion preferences still show a static indicator.
 
 These reviewed revisions are implemented in the native v1.4.0 APK. The entries above retain the design iteration history; browser audio and overlays remain simulations. Native settings, capture, Android overlay permission and lifecycle are verified separately in `../qa/` and `../validation.md`.
+
+
+v1.4.1 corrects reopen anchoring: both animations pivot around Live Speak, and reopening aligns the microphone to the bubble's current center, including after dragging the bubble. Horizontal sound-strip scrolling is retained. The full panel stays within the simulated screen; edge clamping takes priority when the complete panel cannot fit around the requested anchor. Browser checks matched the moved bubble and expanded Live Speak centers within 0.02 viewport pixels. The temporary test tab preserved the user's settings draft. Import in a desktop browser remains the browser's own file chooser; Android picker compatibility is implemented and tested in the APK.
+
+Both base and minimized button-size sliders now support 64–200px in 4px steps, with 88px defaults. The minimized settings preview scales to fit.

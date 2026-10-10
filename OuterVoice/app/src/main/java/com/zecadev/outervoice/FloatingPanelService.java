@@ -49,6 +49,7 @@ public final class FloatingPanelService extends Service {
     private WindowManager windows;
     private WindowManager.LayoutParams params;
     private View panel;
+    private HorizontalScrollView soundScroll;
     private TextView mic, status;
     private File temporary;
     private Typeface icons, font;
@@ -147,7 +148,7 @@ public final class FloatingPanelService extends Service {
     private void buildPanel() {
         main.removeCallbacks(autoMinimize); transitioning = false; gestureActive = false;
         if (panel != null) { panel.animate().cancel(); windows.removeView(panel); panel = null; }
-        mic = null; status = null;
+        mic = null; status = null; soundScroll = null;
         config = FloatingConfig.load(this); size = config.size; micEnlargement = config.micEnlargement;
         DisplayMetrics metrics = new DisplayMetrics(); windows.getDefaultDisplay().getRealMetrics(metrics); screenW = metrics.widthPixels; screenH = metrics.heightPixels;
         minimized = FloatingConfig.prefs(this).getBoolean("minimized", false);
@@ -172,7 +173,7 @@ public final class FloatingPanelService extends Service {
         if(width>=360){TextView label=text("Minimize",22,FloatingConfig.TEAL);label.setPadding(12,0,0,0);minimize.addView(label);}
         LinearLayout.LayoutParams middle=new LinearLayout.LayoutParams(0,60,1);middle.setMargins(16,0,16,0);toolbar.addView(minimize,middle);minimize.setOnClickListener(v->transitionPanel(true));
         TextView close=text("\ue5cd",32,0xfff6f9fa);close.setTypeface(icons);close.setBackground(controlShape(0xff182329,0xff30414a));close.setContentDescription("Close floating panel");toolbar.addView(close,new LinearLayout.LayoutParams(60,60));close.setOnClickListener(v->confirmClose());
-        HorizontalScrollView scroll=new HorizontalScrollView(this);scroll.setFillViewport(true);scroll.setHorizontalScrollBarEnabled(total>width-28);LinearLayout strip=row();strip.setGravity(count==1?Gravity.CENTER:Gravity.LEFT|Gravity.CENTER_VERTICAL);scroll.addView(strip);content.addView(scroll,new LinearLayout.LayoutParams(width-28,largest+34));
+        HorizontalScrollView scroll=new HorizontalScrollView(this);soundScroll=scroll;scroll.setFillViewport(true);scroll.setHorizontalScrollBarEnabled(total>width-28);LinearLayout strip=row();strip.setGravity(count==1?Gravity.CENTER:Gravity.LEFT|Gravity.CENTER_VERTICAL);scroll.addView(strip);content.addView(scroll,new LinearLayout.LayoutParams(width-28,largest+34));
         for(FloatingConfig.Item item:config.items)if(item.selected){int d=config.diameter(item.isLive());LinearLayout sound=circle(item,d,largest);LinearLayout.LayoutParams pos=new LinearLayout.LayoutParams(d,largest+34);if(strip.getChildCount()>0)pos.leftMargin=config.spacing;strip.addView(sound,pos);
             if(item.isLive()){mic=(TextView)sound.getChildAt(0);mic.setOnTouchListener((view,event)->{switch(event.getActionMasked()){
                 case MotionEvent.ACTION_DOWN:view.getParent().requestDisallowInterceptTouchEvent(true);beginRecording();return true;
@@ -184,6 +185,7 @@ public final class FloatingPanelService extends Service {
         status=text("Hold Live Speak; release to play",12,0xffaebcc7);status.setMaxLines(1);content.addView(status,new LinearLayout.LayoutParams(-1,20));panel=content;
         params=new WindowManager.LayoutParams(width,largest+158,WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,PixelFormat.TRANSLUCENT);params.gravity=Gravity.TOP|Gravity.LEFT;params.alpha=.8f;
         params.x=FloatingConfig.prefs(this).getInt("x",24);params.y=FloatingConfig.prefs(this).getInt("y",Math.max(0,screenH-params.height-24));clamp();windows.addView(panel,params);
+        scroll.addOnLayoutChangeListener(new View.OnLayoutChangeListener(){@Override public void onLayoutChange(View v,int l,int t,int r,int b,int ol,int ot,int or,int ob){scroll.removeOnLayoutChangeListener(this);scroll.scrollTo(FloatingConfig.prefs(FloatingPanelService.this).getInt("strip_scroll",0),0);}});
         grip.setOnTouchListener(new View.OnTouchListener(){float x,y;int startX,startY;public boolean onTouch(View v,MotionEvent e){switch(e.getActionMasked()){
             case MotionEvent.ACTION_DOWN:cancelAudio();x=e.getRawX();y=e.getRawY();startX=params.x;startY=params.y;return true;
             case MotionEvent.ACTION_MOVE:params.x=startX+Math.round(e.getRawX()-x);params.y=startY+Math.round(e.getRawY()-y);clamp();windows.updateViewLayout(panel,params);return true;
@@ -213,8 +215,25 @@ public final class FloatingPanelService extends Service {
             int[] location=new int[2];mic.getLocationOnScreen(location);
             int x=Math.max(0,Math.min(screenW-d,Math.round(location[0]+mic.getWidth()*mic.getScaleX()/2f-d/2f)));
             int y=Math.max(0,Math.min(screenH-d,Math.round(location[1]+mic.getHeight()*mic.getScaleY()/2f-d/2f)));
-            panel.setPivotX(0);panel.setPivotY(0);panel.animate().scaleX(d/(float)params.width).scaleY(d/(float)params.height).translationX(x-params.x).translationY(y-params.y).alpha(0).setDuration(duration).setInterpolator(new DecelerateInterpolator()).withEndAction(()->{if(destroyed)return;FloatingConfig.prefs(this).edit().putBoolean("minimized",true).putInt("bubble_x",x).putInt("bubble_y",y).commit();buildPanel();panel.setAlpha(0);panel.animate().alpha(1).setDuration(ValueAnimator.areAnimatorsEnabled()?140:0).start();}).start();
-        }else{int x=params.x,y=params.y;FloatingConfig.prefs(this).edit().putBoolean("minimized",false).commit();buildPanel();transitioning=true;panel.setPivotX(0);panel.setPivotY(0);panel.setScaleX(d/(float)params.width);panel.setScaleY(d/(float)params.height);panel.setTranslationX(x-params.x);panel.setTranslationY(y-params.y);panel.setAlpha(0);panel.animate().scaleX(1).scaleY(1).translationX(0).translationY(0).alpha(1).setDuration(duration).setInterpolator(new DecelerateInterpolator()).withEndAction(()->{transitioning=false;armAutoMinimize();}).start();}
+            float cx=location[0]+mic.getWidth()*mic.getScaleX()/2f,cy=location[1]+mic.getHeight()*mic.getScaleY()/2f;
+            FloatingConfig.prefs(this).edit().putInt("strip_scroll",soundScroll.getScrollX()).apply();
+            panel.setPivotX(cx-params.x);panel.setPivotY(cy-params.y);float scale=d/(float)config.diameter(true);
+            panel.animate().scaleX(scale).scaleY(scale).translationX(x+d/2f-cx).translationY(y+d/2f-cy).alpha(0).setDuration(duration).setInterpolator(new DecelerateInterpolator()).withEndAction(()->{if(destroyed)return;FloatingConfig.prefs(this).edit().putBoolean("minimized",true).putInt("bubble_x",x).putInt("bubble_y",y).commit();buildPanel();panel.setAlpha(0);panel.animate().alpha(1).setDuration(ValueAnimator.areAnimatorsEnabled()?140:0).start();}).start();
+        }else{
+            float cx=params.x+d/2f,cy=params.y+d/2f;
+            FloatingConfig.prefs(this).edit().putBoolean("minimized",false).commit();buildPanel();
+            View opening=panel;opening.setAlpha(0);transitioning=true;main.removeCallbacks(autoMinimize);
+            opening.addOnLayoutChangeListener(new View.OnLayoutChangeListener(){@Override public void onLayoutChange(View v,int l,int t,int r,int b,int ol,int ot,int or,int ob){
+                opening.removeOnLayoutChangeListener(this);
+                if(destroyed||panel!=opening||minimized)return;
+                int[] location=new int[2];mic.getLocationOnScreen(location);
+                float px=location[0]+mic.getWidth()/2f-params.x,py=location[1]+mic.getHeight()/2f-params.y;
+                params.x=Math.round(cx-px);params.y=Math.round(cy-py);clamp();windows.updateViewLayout(opening,params);
+                FloatingConfig.prefs(FloatingPanelService.this).edit().putInt("x",params.x).putInt("y",params.y).apply();
+                float scale=d/(float)config.diameter(true);opening.setPivotX(px);opening.setPivotY(py);opening.setScaleX(scale);opening.setScaleY(scale);opening.setTranslationX(cx-params.x-px);opening.setTranslationY(cy-params.y-py);
+                opening.animate().scaleX(1).scaleY(1).translationX(0).translationY(0).alpha(1).setDuration(duration).setInterpolator(new DecelerateInterpolator()).withEndAction(()->{transitioning=false;armAutoMinimize();}).start();
+            }});
+        }
     }
     private void confirmClose(){
         cancelAudio();main.removeCallbacks(autoMinimize);confirmingClose=true;
