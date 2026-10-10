@@ -44,7 +44,7 @@ Run only pure Java WAV validation tests:
 powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -TestOnly
 ```
 
-Build output: `dist/OuterVoice-1.4.0.apk`. The script verifies its signature and alignment and writes `dist/SHA256.txt`. Build on the normal Windows host if a restricted sandbox blocks Java SDK access.
+Build output: `dist/OuterVoice-1.4.1.apk`. The script verifies its signature and alignment and writes `dist/SHA256.txt`. Build on the normal Windows host if a restricted sandbox blocks Java SDK access.
 
 The APK is signed with a locally generated Zeca/Outer Voice key, stored outside the app source in `.build-tools/outervoice-signing.jks`, with its password in `.build-tools/outervoice-signing-password.txt`. Preserve both privately for signed updates; neither is included in the APK, source archive or Git repository.
 
