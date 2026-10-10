@@ -1,13 +1,13 @@
 # Outer Voice
 
-Native Android app for a 1024 × 600 head unit. Version 1.4.1 (build 9), package `com.zecadev.outervoice`, Android 9/API 28 or later. Signed with the existing update certificate.
+Native Android app for a 1024 × 600 head unit. Version 1.4.2 (build 10), package `com.zecadev.outervoice`, Android 9/API 28 or later. Signed with the existing update certificate.
 
 ## Operation
 
 - Live Speaking: hold the microphone button to record; release to finalize the WAV and immediately play it through BUS12_OUTER_NOTIFY. Record & Play and its separate Play button have been removed.
 - Recording selects a microphone format supported by Android, trying the device default and available sample rates, stereo/mono and float/PCM16 capture. The captured sample rate and channel count are retained; float samples are converted to PCM16 WAV storage for the existing player. There is no fixed 44.1 kHz mono capture requirement. The 180-second maximum remains. Temporary live recordings are discarded when leaving the app and are not added to Saved sounds.
 - Cancelled gestures, navigation, backgrounding and audio focus loss discard unfinished recordings.
-- Add Sound: use Import Sound to select WAV, MP3 or other audio, or record the microphone. Successful imports enable Play/Stop to test the outer speaker before Add Sound saves the clip. Import examines file contents rather than enforcing an extension list. Import first opens Android's document picker with any extension allowed. Head units without that picker can use a compatible GET_CONTENT file manager that supports arbitrary files; images-only galleries are excluded. If no compatible picker is available, the app explains this and offers Android Settings or an explicitly selected built-in browser. It does not silently substitute the built-in browser. PCM8/16/24/32 and float32/64 WAVs are converted directly; other formats use the Android device's decoders. Unreadable audio is reported. There is no fixed 20 MB input limit; free storage and the WAV container capacity still apply. Imports are streamed into 44.1 kHz mono PCM16 WAVs for the existing BUS12 player. Codec priming/padding is retained rather than applying untrusted gapless trim metadata. Saved sounds persist across restarts.
+- Add Sound: use Import Sound to select WAV, MP3 or other audio, or record the microphone. Successful imports enable Play/Stop to test the outer speaker before Add Sound saves the clip. Import examines file contents rather than enforcing an extension list. Import Sound directly opens Outer Voice's built-in storage browser using the v1.2.2 folder-navigation approach. Grant file access if prompted, choose Internal storage or an accessible mounted storage location, then browse folders and select a file. The browser lists every non-hidden file without an extension restriction and imports based on its contents. It does not depend on an installed Android document picker or file manager. PCM8/16/24/32 and float32/64 WAVs are converted directly; other formats use the Android device's decoders. Unreadable audio is reported. There is no fixed 20 MB input limit; free storage and the WAV container capacity still apply. Imports are streamed into 44.1 kHz mono PCM16 WAVs for the existing BUS12 player. Codec priming/padding is retained rather than applying untrusted gapless trim metadata. Saved sounds persist across restarts.
 - Edit List: rename sounds, reorder the home list with up/down controls, or stage a confirmed deletion. Save Changes applies the edits and deletes removed WAV files. Cancel or Back discards the entire draft. The home list has no trash buttons. Renaming retains sound identity and floating-panel selection/color/icon; deleted sounds disappear from the panel. The panel's separately configured order is retained.
 - Audio settings provide media volume, speaker test and diagnostics. WAV playback uses the existing peak normalization, capped at ×16. BUS12 playback remains unchanged from v1.1.0; there is no default speaker fallback.
 
@@ -44,7 +44,7 @@ Run only pure Java WAV validation tests:
 powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -TestOnly
 ```
 
-Build output: `dist/OuterVoice-1.4.1.apk`. The script verifies its signature and alignment and writes `dist/SHA256.txt`. Build on the normal Windows host if a restricted sandbox blocks Java SDK access.
+Build output: `dist/OuterVoice-1.4.2.apk`. The script verifies its signature and alignment and writes `dist/SHA256.txt`. Build on the normal Windows host if a restricted sandbox blocks Java SDK access.
 
 The APK is signed with a locally generated Zeca/Outer Voice key, stored outside the app source in `.build-tools/outervoice-signing.jks`, with its password in `.build-tools/outervoice-signing-password.txt`. Preserve both privately for signed updates; neither is included in the APK, source archive or Git repository.
 

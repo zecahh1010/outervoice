@@ -2,15 +2,15 @@
 
 Native Android app for a 1024 × 600 landscape vehicle head unit. Developer: Zeca. Tester credit: SL. Contributors: Chris and j.Lun.
 
-[Download v1.4.1 APK](https://github.com/zecahh1010/outervoice/releases/download/v1.4.1/OuterVoice-1.4.1.apk) · [Release notes and source archive](https://github.com/zecahh1010/outervoice/releases/tag/v1.4.1) · [App documentation](OuterVoice/README.md) · [Validation](OuterVoice/validation.md)
+[Download v1.4.2 APK](https://github.com/zecahh1010/outervoice/releases/download/v1.4.2/OuterVoice-1.4.2.apk) · [Release notes and source archive](https://github.com/zecahh1010/outervoice/releases/tag/v1.4.2) · [App documentation](OuterVoice/README.md) · [Validation](OuterVoice/validation.md)
 
-Android 9/API 28 or later; package `com.zecadev.outervoice`; version **1.4.1 (build 9)**. The APK uses the retained signing certificate. Install it over the existing app to preserve saved sounds and settings.
+Android 9/API 28 or later; package `com.zecadev.outervoice`; version **1.4.2 (build 10)**. The APK uses the retained signing certificate. Install it over the existing app to preserve saved sounds and settings.
 
-## What's new in v1.4.1
+## What's new in v1.4.2
 
-- **Larger buttons:** both Button size and Minimized button size support **64–200 physical pixels**, in 4px steps, with an 88px default. Settings previews scale to fit.
-- **Correct reopen position:** minimizing anchors the bubble to Live Speak. Reopening anchors Live Speak to the bubble's current position, including after dragging it, reordering buttons or scrolling the sound strip. Both transitions animate around the microphone. Near a screen edge, placement is adjusted to keep the full panel accessible.
-- **Android file picker:** Import Sound opens Android's document picker first, with a compatible arbitrary-file GET_CONTENT picker as a fallback. Images-only galleries are excluded. If no compatible picker is available, the app offers Android Settings or an explicit built-in Browse files option.
+- **Built-in sound browser:** Import Sound opens Outer Voice's own storage/folder browser directly, using the approach available in v1.2.2. Grant file access if prompted, choose internal or accessible mounted storage, and browse to a sound. An installed Android document picker or file manager is no longer required.
+- **Existing sound support retained:** WAV, MP3 and other device-decodable audio remain importable. Files are checked by contents; selecting an unsupported or unreadable file reports an error. Play/Stop preview remains available after a successful import.
+- The v1.4.1 improvements remain: 64–200px button and minimized-button sizes, proportional icons, and Live Speak positioning when minimizing/reopening or moving the bubble.
 
 ## Features
 
@@ -30,17 +30,17 @@ Android 9/API 28 or later; package `com.zecadev.outervoice`; version **1.4.1 (bu
 3. Grant microphone access. To use the floating panel, enable **Display over other apps** when prompted.
 4. Run the speaker test on the actual head unit, then hold Live Speak and release to play.
 
-Android's file picker requires an enabled compatible picker on the head unit. Audio codec support and the BUS12 speaker route depend on its firmware.
+The built-in browser requires file-access permission and can show storage readable by the app. Audio codec support, access to USB/external storage and the BUS12 speaker route depend on the head unit's Android version and firmware.
 
 ## Validation and hardware status
 
-v1.4.1 retains the existing BUS12 playback route. Audio-format/conversion tests, native compilation, APK signature/alignment and update installation pass. Android 9 emulator checks cover both size limits and persistence, anchored minimize/reopen after movement/reordering/scrolling, screen-edge placement, Android's document picker, compatible file-manager import and explicit missing-picker behavior. Saved-sound fixtures remain unchanged.
+v1.4.2 retains the existing BUS12 playback route. Completed checks and evidence for this release are recorded in [validation](OuterVoice/validation.md). The v1.4.1 checks for size limits and anchored panel transitions remain documented there as well.
 
-Audible external-speaker output, microphone quality, firmware-specific picker availability and overlay behavior still require the actual head unit. See [validation](OuterVoice/validation.md) for evidence and remaining hardware checks.
+Audible external-speaker output, microphone quality, external-storage access and firmware-specific overlay behavior still require the actual head unit.
 
 ## Proposed enhancements
 
-These are discussion proposals, not features included in v1.4.1 or commitments to a release date. Suggested first priorities are backup/restore, a floating Stop control and saved panel profiles.
+These are discussion proposals, not features included in v1.4.2 or commitments to a release date. Suggested first priorities are backup/restore, a floating Stop control and saved panel profiles.
 
 | Proposal | Intended behavior |
 |---|---|

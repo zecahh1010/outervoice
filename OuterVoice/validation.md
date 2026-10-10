@@ -122,3 +122,15 @@ Signed APK `dist/OuterVoice-1.4.1.apk`, version 1.4.1 (9), 775305 bytes, SHA256 
 - Browser verification matches the moved bubble center (507.4448, 379.1052) and expanded Live Speak center (507.4448, 379.1203), within 0.02 viewport pixels. A temporary test tab preserves the user's open settings draft; the original bubble position is restored afterward.
 
 Evidence: `qa/check-v141.py`, `qa/build-picker-probe.py`, `qa/picker-probe/`, and `qa/v141-*` PNG/XML. The emulator's compatible-picker probe validates the legacy intent path, not the head unit's installed file manager. If firmware has no enabled compatible picker, enabling or installing one is required for a native picker. Audible BUS12 output remains a vehicle check.
+
+
+## v1.4.2 — direct built-in storage browser (2026-10-10)
+
+Signed APK `dist/OuterVoice-1.4.2.apk`, version 1.4.2 (10), 771211 bytes, SHA256 `edef1b40588f2f10a22c8cd1ca500386f2286338439c9dcecc12239f18e04fb7`. WAV validation, normalization, PCM conversion/import tests, native compilation, signature and alignment checks pass. The retained certificate SHA256 is `664b72c9d4c6075814ffa1c9b72a2d0c78132238fbed9d6b2265b78a7614a17e`. Update installation over v1.4.1 preserves saved-sound preferences exactly.
+
+- Import Sound directly opens the app's Choose storage dialog with Android DocumentsUI enabled. Denying file-access permission returns to Add Sound; retrying and allowing access opens the browser. The resumed activity remains Outer Voice. It also opens directly with DocumentsUI disabled.
+- Internal storage, Download, a disposable test folder, Up, folder re-entry and Cancel work. The browser lists non-hidden files of every extension.
+- PCM24 WAV, MP3 and MP3 content named `.bin` import successfully into 44.1kHz mono PCM16 WAVs of the expected duration. Successful imports enable Play, and preview requests correctly report BUS12 unavailable on the emulator. Invalid `broken.wav` is rejected with Play disabled. Cancel removes pending files.
+- Saved-sound preferences remain unchanged across all cases. The original floating preferences, storage permission grant and DocumentsUI state are restored; only the four temporary fixture copies and their test folder are removed. No AndroidRuntime fatal crash is observed. Transient null accessibility roots are retried.
+
+Evidence: `qa/check-v142.py`, `qa/v142-*` PNG/XML and the signed APK. Floating-panel positioning and 64–200px configuration code are unchanged from v1.4.1. Mounted USB/external-storage access, newer-Android storage behavior and audible BUS12 output remain actual-head-unit checks.

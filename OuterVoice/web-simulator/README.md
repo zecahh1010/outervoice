@@ -46,3 +46,5 @@ These reviewed revisions are implemented in the native v1.4.0 APK. The entries a
 v1.4.1 corrects reopen anchoring: both animations pivot around Live Speak, and reopening aligns the microphone to the bubble's current center, including after dragging the bubble. Horizontal sound-strip scrolling is retained. The full panel stays within the simulated screen; edge clamping takes priority when the complete panel cannot fit around the requested anchor. Browser checks matched the moved bubble and expanded Live Speak centers within 0.02 viewport pixels. The temporary test tab preserved the user's settings draft. Import in a desktop browser remains the browser's own file chooser; Android picker compatibility is implemented and tested in the APK.
 
 Both base and minimized button-size sliders now support 64–200px in 4px steps, with 88px defaults. The minimized settings preview scales to fit.
+
+In native v1.4.2, Import Sound opens the built-in storage browser directly using the v1.2.2 folder-navigation approach. The desktop simulator continues to use the browser's file chooser; native folder and permission behavior is tested in the Android emulator.

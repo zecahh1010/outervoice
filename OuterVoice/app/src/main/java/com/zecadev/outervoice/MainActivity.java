@@ -42,7 +42,7 @@ public class MainActivity extends Activity {
     private static final int BG = Color.rgb(15, 23, 28), SURFACE = Color.rgb(24, 35, 41);
     private static final int TEAL = Color.rgb(0, 198, 199), MUTED = Color.rgb(174, 188, 199);
     private static final int LINE = Color.rgb(48, 65, 74), WHITE = Color.rgb(246, 249, 250);
-    private static final int MIC_REQUEST = 10, WAV_REQUEST = 11, STORAGE_REQUEST = 12;
+    private static final int MIC_REQUEST = 10, STORAGE_REQUEST = 12;
     private final Handler main = new Handler();
     private final ArrayList<Sound> sounds = new ArrayList<>();
     private final ArrayList<TextView> rows = new ArrayList<>();
@@ -507,11 +507,6 @@ public class MainActivity extends Activity {
         actions.addView(saveButton, saveParams); form.addView(actions);
         cancel.setOnClickListener(v -> cancelAdd()); saveButton.setOnClickListener(v -> saveSound());
     }
-    @Override protected void onActivityResult(int request, int result, Intent data) {
-        super.onActivityResult(request, result, data);
-        if (request != WAV_REQUEST || result != RESULT_OK || data == null || data.getData() == null || !"add".equals(page)) return;
-        importWav(data.getData());
-    }
     private void updatePreview() {
         if (!"add".equals(page) || previewPlay == null) return;
         boolean available = pendingFile != null && !importing && !recorder.active();
@@ -631,35 +626,9 @@ public class MainActivity extends Activity {
         return "file".equals(uri.getScheme()) ? new java.io.FileInputStream(new File(uri.getPath())) : getContentResolver().openInputStream(uri);
     }
     private void chooseWav() {
-        if (recorder.active() || importing) { toast("Stop recording or wait for import first"); return; }
-        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*");
-        intent.addCategory(Intent.CATEGORY_OPENABLE); intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        try { startActivityForResult(intent, WAV_REQUEST); return; }
-        catch (android.content.ActivityNotFoundException e) { AudioDiagnostics.log("File picker absent"); }
-        catch (RuntimeException e) { AudioDiagnostics.log("File picker failed: " + e.getMessage()); }
-        // Some head units expose a file manager only through GET_CONTENT. Require
-        // arbitrary-file support so an images-only gallery cannot take over import.
-        Intent content = new Intent(Intent.ACTION_GET_CONTENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        Intent arbitrary = new Intent(content).setType("application/octet-stream");
-        ArrayList<Intent> choices = new ArrayList<>();
-        for (android.content.pm.ResolveInfo candidate : getPackageManager().queryIntentActivities(content, PackageManager.MATCH_DEFAULT_ONLY)) {
-            for (android.content.pm.ResolveInfo supported : getPackageManager().queryIntentActivities(arbitrary, PackageManager.MATCH_DEFAULT_ONLY)) {
-                if (candidate.activityInfo.packageName.equals(supported.activityInfo.packageName) && candidate.activityInfo.name.equals(supported.activityInfo.name)) {
-                    choices.add(new Intent(content).setComponent(new android.content.ComponentName(candidate.activityInfo.packageName, candidate.activityInfo.name)));break;
-                }
-            }
-        }
-        if (!choices.isEmpty()) {
-            Intent picker = Intent.createChooser(choices.remove(0), "Import Sound");
-            if (!choices.isEmpty()) picker.putExtra(Intent.EXTRA_INITIAL_INTENTS, choices.toArray(new Intent[0]));
-            try { startActivityForResult(picker, WAV_REQUEST); return; }
-            catch (RuntimeException e) { AudioDiagnostics.log("Compatible file picker failed: " + e.getMessage()); }
-        }
-        new AlertDialog.Builder(this).setTitle("Android file picker unavailable")
-                .setMessage("No working Android file picker is available on this device. Enable a file picker in Android Settings, or choose Browse files to use Outer Voice's built-in browser.")
-                .setNegativeButton("Cancel", null)
-                .setPositiveButton("Android Settings", (d,w)->{try{startActivity(new Intent(android.provider.Settings.ACTION_SETTINGS));}catch(RuntimeException e){toast("Android Settings unavailable");}})
-                .setNeutralButton("Browse files", (d,w)->browseFiles(null)).show();
+        // Use the v1.2.2 built-in storage browser directly on head units.
+        // The browser keeps all extensions selectable for content-based import.
+        browseFiles(null);
     }
     private void browseFiles(File directory) {
         if (recorder.active() || importing || !"add".equals(page)) { toast("Stop recording or wait for import first"); return; }

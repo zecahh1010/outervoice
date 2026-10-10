@@ -47,3 +47,8 @@ Recording status updates continuously; the tests stop recording using the alread
 `build-picker-probe.py` builds the test-only `picker-probe/` app into ignored `.build-tools/`. `check-v141.py picker` verifies actual Android DocumentsUI and cancellation, a legacy GET_CONTENT arbitrary-file picker returning a WAV content URI, enabled imported Play, exclusion of an images-only gallery and an explicit missing-picker dialog/browser choice. It removes the probe and restores the original DocumentsUI state. All phases compare saved-sound preferences exactly and reject AndroidRuntime fatal crashes. Retained `v141-*` screenshots/XML document results. Actual OEM picker availability remains a head-unit check.
 
 `check-v141.py sizes` verifies both sliders at 64px and 200px, Save Settings and persistence across restart. The maximum-size preview is visually checked for fit. The `anchor` wide-strip fixture uses 200px base and minimized sizes, 100% Live Speak enlargement and 40px spacing.
+
+
+## v1.4.2 direct built-in browser
+
+`check-v142.py` exercises file-access denial, retry and grant; direct Import Sound browsing while DocumentsUI is enabled and disabled; internal storage, folder selection, Up and Cancel; PCM24 WAV, MP3 and MP3 data with a .bin extension; invalid audio rejection; preview playback requests and cancellation cleanup. It uses a separate temporary folder in the disposable emulator and restores the original floating preferences, storage grant and DocumentsUI state. Saved-sound preferences are compared exactly; AndroidRuntime fatal crashes are rejected. The emulator cannot verify USB mounting or audible BUS12 output on the vehicle.
