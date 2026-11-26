@@ -1,0 +1,13 @@
+# Outer Voice 1.5.0 notices
+
+This is Outer Voice, a modified combined application, not the original Zeekr Shortcut and not an official Zeekr product.
+
+Based on Zeekr Shortcut by dts88 (https://github.com/dts88/zeekr-shortcut-car)
+
+Smart button protocol and GATT implementation originate from upstream commit `5d9d8a872e459aed49d657a94c55eaeafbf5155d`, retrieved 2026-11-26. `Accessory.java`, `SmartButtonAd.java` and `ButtonLink.java` retain the upstream copyright headers. The package is changed to Outer Voice; AndroidX annotations and vehicle/knob lighting controls are removed. `SmartButtonsService.java` and `SmartButtonActions.java` adapt the upstream event handling for independent audio actions, local pairing and a foreground listener. These modifications are dated 2026-11-26.
+
+The combined release is distributed under GPL-3.0-only with dts88's applicable GPL section 7 attribution and modified-version terms. See `GPL-3.0.txt` and section 8 of `UPSTREAM-NOTICE.md`. The complete upstream notice is retained for provenance; unrelated camera, ntfy and vehicle-control components were not incorporated.
+
+Original Outer Voice MIT notices are retained in `LICENSE-MIT.txt`. Font and other bundled asset notices remain under `app/src/main/assets`. The About/Credits page displays the required attribution and bundled license text.
+
+Corresponding source, assets, native tests and build scripts accompany the APK in `OuterVoice-1.5.0-source.zip`. Private signing keys/passwords are not included. A new builder supplies their own signing key, JDK and Android SDK; replacing an installed APK using its existing identity requires the original signing certificate.

@@ -1,12 +1,14 @@
 # Outer Voice
 
-Native Android app for a 1024 × 600 head unit. Version 1.4.2 (build 10), package `com.zecadev.outervoice`, Android 9/API 28 or later. Signed with the existing update certificate.
+Native Android app for a 1024 × 600 head unit. Version 1.5.0 (build 11), package `com.zecadev.outervoice`, Android 9/API 28 or later. Signed with the existing update certificate.
+
+See [1.5.0 release notes](release-notes-v1.5.0.md) for independent 靈動貼 actions, BLE pairing and 0..+24 dB exterior digital gain. See [validation](validation-v1.5.0.md) for emulator evidence and car-only checks.
 
 ## Operation
 
-- Live Speaking: hold the microphone button to record; release to finalize the WAV and immediately play it through BUS12_OUTER_NOTIFY. Record & Play and its separate Play button have been removed.
-- Recording selects a microphone format supported by Android, trying the device default and available sample rates, stereo/mono and float/PCM16 capture. The captured sample rate and channel count are retained; float samples are converted to PCM16 WAV storage for the existing player. There is no fixed 44.1 kHz mono capture requirement. The 180-second maximum remains. Temporary live recordings are discarded when leaving the app and are not added to Saved sounds.
-- Cancelled gestures, navigation, backgrounding and audio focus loss discard unfinished recordings.
+- Speaking mode: choose hold/release/play (default), tap/record/tap/stop/play, or Live Speak (tap to start/stop realtime microphone output). Screen and floating controls use this choice. Record mode shows a red microphone with motion. Physical smart button actions have independent settings; neither selection forces the other to change. All audio uses BUS12_OUTER_NOTIFY.
+- Recording selects a microphone format supported by Android, trying the device default and available sample rates, stereo/mono and float/PCM16 capture. The captured sample rate and channel count are retained; float samples are converted to PCM16 WAV storage for the existing player. There is no fixed 44.1 kHz mono capture requirement. The 180-second maximum remains. Temporary Activity-owned recordings are discarded when leaving the app and are not added to Saved sounds. Background overlay and remote sessions have separate foreground-service lifetimes.
+- Cancelled gestures, navigation/backgrounding discard Activity-owned recordings. Overlay and smart-button recording continue under their foreground services when the Activity is backgrounded. Audio focus loss cancels the shared session. Toggle recording and Live Speak can be stopped from a visible microphone control regardless of which control started them.
 - Add Sound: use Import Sound to select WAV, MP3 or other audio, or record the microphone. Successful imports enable Play/Stop to test the outer speaker before Add Sound saves the clip. Import examines file contents rather than enforcing an extension list. Import Sound directly opens Outer Voice's built-in storage browser using the v1.2.2 folder-navigation approach. Grant file access if prompted, choose Internal storage or an accessible mounted storage location, then browse folders and select a file. The browser lists every non-hidden file without an extension restriction and imports based on its contents. It does not depend on an installed Android document picker or file manager. PCM8/16/24/32 and float32/64 WAVs are converted directly; other formats use the Android device's decoders. Unreadable audio is reported. There is no fixed 20 MB input limit; free storage and the WAV container capacity still apply. Imports are streamed into 44.1 kHz mono PCM16 WAVs for the existing BUS12 player. Codec priming/padding is retained rather than applying untrusted gapless trim metadata. Saved sounds persist across restarts.
 - Edit List: rename sounds, reorder the home list with up/down controls, or stage a confirmed deletion. Save Changes applies the edits and deletes removed WAV files. Cancel or Back discards the entire draft. The home list has no trash buttons. Renaming retains sound identity and floating-panel selection/color/icon; deleted sounds disappear from the panel. The panel's separately configured order is retained.
 - Audio settings provide media volume, speaker test and diagnostics. WAV playback uses the existing peak normalization, capped at ×16. BUS12 playback remains unchanged from v1.1.0; there is no default speaker fallback.
@@ -22,9 +24,9 @@ Tap the touch/ripple icon in the home header to open **Floating Panel**.
 
 The panel follows CarPiano's floating-panel structure: MainActivity opens the controls, while FloatingPanelService uses the default display's WindowManager to create a `TYPE_APPLICATION_OVERLAY` window maintained by a foreground service with an ongoing notification. It uses the same default head-unit screen as CarPiano, rather than selecting a separate display. It stays above ordinary apps when Outer Voice is backgrounded. The full MainActivity remains a normal app screen, as in CarPiano. Android may hide overlays on protected system screens. On newer Android versions, microphone and foreground-service restrictions can also depend on firmware.
 
-Hold the floating Live Speak microphone to record; release it to finalize a WAV using the captured rate/channel count and request immediate BUS12 playback. A strong, smooth pulse and inset ring indicate recording. The temporary clip is deleted after playback/error or cancellation. Tap a saved-sound circle to play it; choosing another sound replaces current playback. Activity and floating audio share ownership to prevent simultaneous sessions.
+The floating microphone uses the saved screen mode: hold/release/play, tap/record/tap/stop/play, or tap/start/stop Live Speak. Recorded WAVs retain the captured rate/channel count before BUS12 playback. A strong, smooth pulse and inset ring indicate recording. The temporary clip is deleted after playback/error or cancellation. Tap a saved-sound circle to play it; choosing another sound replaces current playback. Activity and floating audio share ownership to prevent simultaneous sessions.
 
-The toolbar places **Move** on the left, **Minimize** in the middle and **Close** on the right. The middle control grows with panel width; a narrow single-button panel uses a minus icon. Drag the dedicated handle to move the full panel. A long sound strip scrolls horizontally while the toolbar stays available. Each manual or automatic minimize centers the bubble on Live Speak's position immediately before collapse, including after reordering, moving or scrolling the panel. It stays within the screen edges. Minimize and reopen animate around Live Speak's center and honor Android's disabled-animation setting. With saved sounds selected, tap the draggable microphone bubble to reopen with Live Speak centered on the bubble, including after dragging the bubble. The sound strip retains its horizontal scroll position. The full panel is kept on screen, so near an edge its position is clamped to the closest usable placement. With only Live Speak selected, hold the bubble directly to record and release to play, without expanding; dragging cancels recording and moves it. Panel/bubble positions and minimized state persist across restart; the next minimize anchors to Live Speak again. Saving settings reopens the full panel.
+The toolbar places **Move** on the left, **Minimize** in the middle and **Close** on the right. The middle control grows with panel width; a narrow single-button panel uses a minus icon. Drag the dedicated handle to move the full panel. A long sound strip scrolls horizontally while the toolbar stays available. Each manual or automatic minimize centers the bubble on Live Speak's position immediately before collapse, including after reordering, moving or scrolling the panel. It stays within the screen edges. Minimize and reopen animate around Live Speak's center and honor Android's disabled-animation setting. With saved sounds selected, tap the draggable microphone bubble to reopen with Live Speak centered on the bubble, including after dragging the bubble. The sound strip retains its horizontal scroll position. The full panel is kept on screen, so near an edge its position is clamped to the closest usable placement. With only Live Speak selected, the bubble controls speaking directly using the selected mode without expanding; dragging cancels overlay-owned recording and moves it. Panel/bubble positions and minimized state persist across restart; the next minimize anchors to Live Speak again. Saving settings reopens the full panel.
 
 Press **×** and confirm **Close panel**, use **Close panel** in the notification, or save settings with **Enable floating panel** unchecked to stop the overlay. Closing disables it. The home header's **Exit** power icon stops audio, disables the overlay, and removes the app task. Opening settings or Add Sound temporarily hides the panel; Cancel restores the saved configuration. Opening Outer Voice after a process stop restores an enabled panel after checking permissions; it does not auto-start after boot.
 
@@ -38,13 +40,13 @@ From this project's directory:
 powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
 ```
 
-Run only pure Java WAV validation tests:
+Run the pure Java WAV, smart-button protocol and digital-gain tests:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -TestOnly
 ```
 
-Build output: `dist/OuterVoice-1.4.2.apk`. The script verifies its signature and alignment and writes `dist/SHA256.txt`. Build on the normal Windows host if a restricted sandbox blocks Java SDK access.
+Build output: `dist/OuterVoice-1.5.0.apk`. The script verifies its signature and alignment and writes `dist/SHA256.txt`. Build on the normal Windows host if a restricted sandbox blocks Java SDK access.
 
 The APK is signed with a locally generated Zeca/Outer Voice key, stored outside the app source in `.build-tools/outervoice-signing.jks`, with its password in `.build-tools/outervoice-signing-password.txt`. Preserve both privately for signed updates; neither is included in the APK, source archive or Git repository.
 
@@ -58,7 +60,7 @@ The emulator can check native screens, file import/persistence and rejection whe
 
 ## Sources and licenses
 
-The MIT license notice is bundled in `app/src/main/assets/LICENSE.txt`. The Credits page displays the app version, developer, tester, contributors and license.
+The combined 1.5.0 release uses GPL-3.0 with upstream section 7 attribution terms. Original Outer Voice MIT notices are retained. See `NOTICE.md`, `GPL-3.0.txt`, `LICENSE-MIT.txt` and `UPSTREAM-NOTICE.md`. The Credits page displays attribution and all bundled license text. The corresponding source ZIP accompanies the APK.
 
 Standard Google Material Icons are bundled under their Apache 2.0 license in `app/src/main/assets/MaterialIcons-LICENSE.txt`. The approved generated launcher artwork is `app-icon-source.png`, exported to Android launcher densities.
 

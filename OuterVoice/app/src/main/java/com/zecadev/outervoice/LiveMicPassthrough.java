@@ -105,7 +105,7 @@ public final class LiveMicPassthrough implements AutoCloseable {
                             .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
                             .setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build())
                     .setBufferSizeInBytes(Math.max(outputMin, CHUNK * 2 * 4))
-                    .setTransferMode(AudioTrack.MODE_STREAM).build();
+                    .setTransferMode(AudioTrack.MODE_STREAM).setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY).build();
             if (input.getState() != AudioRecord.STATE_INITIALIZED
                     || output.getState() != AudioTrack.STATE_INITIALIZED) {
                 throw new IllegalStateException("Audio initialization failed");
@@ -153,10 +153,11 @@ public final class LiveMicPassthrough implements AutoCloseable {
                 }
                 double sum = 0;
                 float currentGain = gain;
+                double exteriorGain = ExteriorGain.linear(SpeakingOptions.prefs(context).getInt("external_db", 0));
                 for (int i = 0; i < count; i++) {
                     double value = samples[i] / 32768.0;
                     sum += value * value;
-                    samples[i] = (short) Math.round(samples[i] * currentGain);
+                    samples[i] = ExteriorGain.sample(samples[i], currentGain * exteriorGain);
                 }
                 int offset = 0;
                 long writeDeadline = SystemClock.elapsedRealtime() + 1000;

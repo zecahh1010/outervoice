@@ -2,45 +2,48 @@
 
 Native Android app for a 1024 × 600 landscape vehicle head unit. Developer: Zeca. Tester credit: SL. Contributors: Chris and j.Lun.
 
-[Download v1.4.2 APK](https://github.com/zecahh1010/outervoice/releases/download/v1.4.2/OuterVoice-1.4.2.apk) · [Release notes and source archive](https://github.com/zecahh1010/outervoice/releases/tag/v1.4.2) · [App documentation](OuterVoice/README.md) · [Validation](OuterVoice/validation.md)
+[Download v1.5.0 APK](OuterVoice/dist/OuterVoice-1.5.0.apk) · [Corresponding source ZIP](OuterVoice/dist/OuterVoice-1.5.0-source.zip) · [Release notes](OuterVoice/release-notes-v1.5.0.md) · [App documentation](OuterVoice/README.md) · [Validation](OuterVoice/validation-v1.5.0.md)
 
-Android 9/API 28 or later; package `com.zecadev.outervoice`; version **1.4.2 (build 10)**. The APK uses the retained signing certificate. Install it over the existing app to preserve saved sounds and settings.
+Android 9/API 28 or later; package `com.zecadev.outervoice`; version **1.5.0 (build 11)**. The APK uses the retained signing certificate. Install it over the existing app to preserve saved sounds and settings.
 
-## What's new in v1.4.2
+## What's new in v1.5.0
 
-- **Built-in sound browser:** Import Sound opens Outer Voice's own storage/folder browser directly, using the approach available in v1.2.2. Grant file access if prompted, choose internal or accessible mounted storage, and browse to a sound. An installed Android document picker or file manager is no longer required.
-- **Existing sound support retained:** WAV, MP3 and other device-decodable audio remain importable. Files are checked by contents; selecting an unsupported or unreadable file reports an error. Play/Stop preview remains available after a successful import.
-- The v1.4.1 improvements remain: 64–200px button and minimized-button sizes, proportional icons, and Live Speak positioning when minimizing/reopening or moving the bubble.
+- **Three speaking modes:** hold/release/play, tap/record/tap/stop/play, or Live Speak for real-time microphone output. Screen and floating controls share this setting.
+- **Zeekr 靈動貼:** a dedicated tab for pairing, naming and independent per-device single-press assignments. Single press defaults to record/stop/play; alternatives include Live Speak, a selected saved sound, stop audio and no action. Double press plays a selected saved sound. Physical-button assignments never force the screen setting to change.
+- **Background feedback:** a shared audio session keeps the floating microphone red with a recording pulse, including recording started remotely. The foreground BLE listener handles advertisements and GATT notifications with deduplication. Long press remains pairing-only.
+- **Exterior digital gain:** 0 to +24 dB for recorded/saved sounds and Live Speak, separate from Android media volume, with bounded output limiting.
+- **Validation:** offline parser/audio tests, signed update installation and 22 Android 13 native assertions passed. Physical Zeekr button pairing, actual BUS12 sound, acoustics and live latency still require the car.
 
 ## Features
 
-- **Live Speaking:** hold to record; release to finalize a temporary WAV and immediately play through `BUS12_OUTER_NOTIFY`. A strong, smooth pulse indicates recording. Capture uses a microphone format supported by the device, without a fixed 44.1kHz mono restriction; recordings are limited to 180 seconds.
+- **Speaking:** choose hold/release/play, tap/record/tap/stop/play or Live Speak. All output uses `BUS12_OUTER_NOTIFY`; recording shows a red animated microphone. Capture uses a microphone format supported by the device, without a fixed 44.1kHz mono restriction; recordings are limited to 180 seconds.
 - **Floating panel:** use Live Speak and selected saved sounds above other apps. Settings are grouped into **Buttons & Order** and **Size & Minimize**. Arrange buttons, choose from ten colors ordered warm to cool and twelve icons, and customize Live Speak's color while retaining its microphone icon.
 - **Size and spacing:** independently adjust base and minimized button sizes from 64–200px. Enlarge the entire Live Speak button by 0–100% (50% default), with proportional icons. Configure spacing between circle edges from 0–40px (12px default).
-- **Minimize and restore:** move the panel using its dedicated handle, or drag the minimized microphone bubble. Optional auto-minimize uses an inactivity timeout of 1–3600 seconds, initially 30 seconds when enabled, and waits during recording or playback. With only Live Speak selected, hold the minimized bubble directly to speak. Layout, position and minimized state persist across restarts.
+- **Minimize and restore:** move the panel using its dedicated handle, or drag the minimized microphone bubble. Optional auto-minimize uses an inactivity timeout of 1–3600 seconds, initially 30 seconds when enabled, and waits during recording or playback. With only the microphone selected, the minimized bubble operates directly using the chosen speaking mode. Layout, position and minimized state persist across restarts.
 - **Saved sounds:** import WAV, MP3 or other device-decodable audio, or record the microphone. Play/Stop lets you preview an imported sound through the outer speaker before saving. Imports convert to the existing player's PCM WAV format; sounds persist across restarts.
 - **Edit List:** stage rename, reorder and confirmed deletion, then Save Changes to apply them. Cancel or Back discards the draft. Renaming preserves floating-panel customization; deleted sounds are removed from the panel.
 - **App controls:** the touch/ripple icon opens floating settings. Exit stops audio, disables the floating panel and closes the app.
-- Media-volume controls, speaker test and copyable audio-routing diagnostics.
+- Independent 靈動貼 assignments, Android media-volume controls, exterior digital gain, speaker test and copyable audio-routing diagnostics.
 
 ## Installation
 
 1. Download the APK above and copy it to the head unit.
 2. Install over the existing Outer Voice app to retain saved sounds and settings.
 3. Grant microphone access. To use the floating panel, enable **Display over other apps** when prompted.
-4. Run the speaker test on the actual head unit, then hold Live Speak and release to play.
+4. Run the speaker test on the actual head unit and choose the screen speaking mode.
+5. For 靈動貼, open its tab, allow Bluetooth/location permissions as requested, enable listening and start pairing. Long-press the actual Zeekr button for about three seconds until its light flashes, then name the device and assign its actions. See the release notes for details.
 
 The built-in browser requires file-access permission and can show storage readable by the app. Audio codec support, access to USB/external storage and the BUS12 speaker route depend on the head unit's Android version and firmware.
 
 ## Validation and hardware status
 
-v1.4.2 retains the existing BUS12 playback route. Completed checks and evidence for this release are recorded in [validation](OuterVoice/validation.md). The v1.4.1 checks for size limits and anchored panel transitions remain documented there as well.
+v1.5.0 retains strict BUS12 routing. Completed checks and verification boundaries are recorded in [v1.5.0 validation](OuterVoice/validation-v1.5.0.md), with the [native regression report](OuterVoice/qa/v150-native/v150-probe.txt). Earlier checks remain in the [historical validation log](OuterVoice/validation.md).
 
 Audible external-speaker output, microphone quality, external-storage access and firmware-specific overlay behavior still require the actual head unit.
 
 ## Proposed enhancements
 
-These are discussion proposals, not features included in v1.4.2 or commitments to a release date. Suggested first priorities are backup/restore, a floating Stop control and saved panel profiles.
+These are discussion proposals, not features included in v1.5.0 or commitments to a release date. Suggested first priorities are backup/restore, a floating Stop control and saved panel profiles.
 
 | Proposal | Intended behavior |
 |---|---|
@@ -56,4 +59,6 @@ These are discussion proposals, not features included in v1.4.2 or commitments t
 
 The application and build script are in [OuterVoice](OuterVoice/README.md). Build with the documented local Java/Android toolchain; portable tool downloads and private signing material are excluded from Git. The retained signing key is required to produce compatible future updates.
 
-The MIT license notice is retained. Material Icons and Inter font licenses are included with the app assets.
+The combined v1.5.0 release is GPL-3.0-only with the applicable upstream GPL section 7 terms. Based on Zeekr Shortcut by dts88 (https://github.com/dts88/zeekr-shortcut-car), pinned at `5d9d8a872e459aed49d657a94c55eaeafbf5155d`. This is a modified Outer Voice application, not the original Zeekr Shortcut.
+
+See [notices](OuterVoice/NOTICE.md), [upstream terms](OuterVoice/UPSTREAM-NOTICE.md) and [GPL-3.0](LICENSE). Original [repository MIT notices](LICENSE-MIT.txt), [Outer Voice MIT notices](OuterVoice/LICENSE-MIT.txt), Material Icons and Inter font licenses are retained. Private signing material is excluded from Git and the corresponding source archive.

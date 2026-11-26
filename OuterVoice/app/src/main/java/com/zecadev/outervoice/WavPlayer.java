@@ -68,6 +68,7 @@ final class WavPlayer {
                 int length = (int) Math.min(buffer.length, remaining);
                 input.readFully(buffer, 0, length);
                 WavTools.amplify(buffer, length, gain);
+                ExteriorGain.apply(buffer, length, ExteriorGain.linear(SpeakingOptions.prefs(context).getInt("external_db", 0)));
                 int offset = 0;
                 deadline = SystemClock.elapsedRealtime() + 1500;
                 while (requested && offset < length) {

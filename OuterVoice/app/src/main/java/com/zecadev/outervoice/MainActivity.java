@@ -53,6 +53,10 @@ public class MainActivity extends Activity {
     private Typeface bodyFont;
     private LiveMicPassthrough live;
     private WavPlayer player;
+    private VoiceSession speech;
+    private boolean speechAnimating;
+    private final Runnable speechChanged = this::onSpeechChanged;
+    private void onSpeechChanged() { if (!paused) updateHome(); }
     private final WavRecorder recorder = new WavRecorder(this);
     private boolean holdingMic;
     private File temporaryRecording;
@@ -114,11 +118,12 @@ public class MainActivity extends Activity {
             @Override public void onLevel(double rms) { main.post(() -> level = rms); }
         });
         player = new WavPlayer(this);
+        speech = VoiceSession.get(this); speech.observers.add(speechChanged);
         setVolumeControlStream(AudioManager.STREAM_MUSIC);
         live.setGain(preferences().getInt("mic_gain", 100) / 100f);
         cleanupTemporary();
         loadSounds();
-        showHome();
+        if ("buttons".equals(getIntent().getStringExtra("tab"))) showSmartButtons(); else showHome();
     }
 
     private int px(float value) { return Math.round(value * scale); }
@@ -169,7 +174,31 @@ public class MainActivity extends Activity {
         header.addView(heading, new LinearLayout.LayoutParams(0, -1, 1f));
         return header;
     }
+    private void addTabs(boolean buttons) {
+        LinearLayout tabs = row(); tabs.setPadding(px(24), px(6), px(24), px(6));
+        for (int i = 0; i < 2; i++) {
+            final boolean selected = i == 1;
+            TextView tab = button(i == 0 ? "收音／聲音" : "靈動貼", selected == buttons);
+            tab.setTextSize(TypedValue.COMPLEX_UNIT_PX, px(19));
+            LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(px(174), px(48)); p.rightMargin = px(12); tabs.addView(tab,p);
+            tab.setOnClickListener(v -> { stopAudio(); if (selected) showSmartButtons(); else showHome(); });
+        }
+        root.addView(tabs,new LinearLayout.LayoutParams(-1,px(60)));
+    }
+    private void showSmartButtons() {
+        stopService(new Intent(this, FloatingPanelService.class));
+        page = "buttons"; startPage("Outer Voice",false); addTabs(true);
+        root.addView(new SmartButtonsPage(this),new LinearLayout.LayoutParams(-1,0,1));
+    }
+    private void selectSpeakingMode() {
+        new AlertDialog.Builder(this).setTitle("畫面及懸浮按鈕收音模式")
+            .setSingleChoiceItems(SpeakingOptions.MODES,SpeakingOptions.mode(this),(d,w)->{
+                speech.cancelIfOwned(this); SpeakingOptions.prefs(this).edit().putInt("screen_mode",w).apply();
+                FloatingPanelService.sync(this,true); d.dismiss(); showHome();
+            }).setNegativeButton("取消",null).show();
+    }
     private void showHome() {
+        HoldFeedback.stop(micButton); speechAnimating = false;
         page = "home"; rows.clear(); bars.clear(); lastHomeState = "";
         LinearLayout header = startPage("Outer Voice", false);
         TextView floating = icon("\ue913", 30, TEAL);
@@ -192,39 +221,36 @@ public class MainActivity extends Activity {
         clickable(exit, Color.TRANSPARENT, 0, 8, false); header.addView(exit, new LinearLayout.LayoutParams(px(48), px(48)));
         exit.setOnClickListener(v -> {
             FloatingConfig.prefs(this).edit().putBoolean("enabled", false).putBoolean("minimized", false).commit();
-            stopService(new Intent(this, FloatingPanelService.class)); stopAudio(); importEpoch++;
+            stopService(new Intent(this, FloatingPanelService.class));
+            SmartButtonsService.command(this,SmartButtonsService.STOP); speech.cancel(); stopAudio(); importEpoch++;
             if (pendingFile != null) pendingFile.delete(); pendingFile = null;
             deleteTemporary(); finishAndRemoveTask();
         });
+        addTabs(false);
         LinearLayout body = row(); body.setGravity(Gravity.TOP);
         root.addView(body, new LinearLayout.LayoutParams(-1, 0, 1f));
         LinearLayout left = column(); left.setGravity(Gravity.CENTER_HORIZONTAL);
         left.setPadding(px(24), px(22), px(24), px(22));
         body.addView(left, new LinearLayout.LayoutParams(px(400), -1));
-        TextView speakingMode = text("Live Speaking", 22, WHITE, true);
+        TextView speakingMode = text("收音模式  ▾", 22, TEAL, true);
+        clickable(speakingMode,SURFACE,LINE,10,false);
+        speakingMode.setPadding(px(12),0,px(12),0); speakingMode.setOnClickListener(v -> selectSpeakingMode());
         speakingMode.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
-        left.addView(speakingMode, new LinearLayout.LayoutParams(-1, px(40)));
+        left.addView(speakingMode, new LinearLayout.LayoutParams(-1, px(48)));
         LinearLayout controls = column(); controls.setGravity(Gravity.CENTER);
         left.addView(controls, new LinearLayout.LayoutParams(-1, 0, 1f));
         micButton = icon("\ue029", 100, TEAL);
         clickable(micButton, Color.TRANSPARENT, TEAL, 0, true);
         controls.addView(micButton, new LinearLayout.LayoutParams(px(160), px(160)));
-        micButton.setOnTouchListener((v, event) -> {
+        micButton.setOnTouchListener((v,event) -> {
+            int mode = SpeakingOptions.mode(this);
             switch (event.getActionMasked()) {
                 case MotionEvent.ACTION_DOWN:
-                    if (!recorder.active() && microphoneAllowed()) {
-                        player.stop(); playingId = "";
-                        holdingMic = true;
-                        toggleRecording(false);
-                        if (!recorder.active()) holdingMic = false; else HoldFeedback.start(micButton);
-                    }
+                    if (microphoneAllowed()) { player.stop(); playingId = ""; feedback = ""; speech.down(this,mode); }
                     return true;
                 case MotionEvent.ACTION_UP:
-                    if (holdingMic) { holdingMic = false; HoldFeedback.stop(micButton); recorder.stop(); feedback = "Saving WAV…"; updateHome(); }
-                    return true;
-                case MotionEvent.ACTION_CANCEL:
-                    if (holdingMic) { stopAudio(); feedback = "Recording cancelled"; updateHome(); }
-                    return true;
+                    if (microphoneAllowed()) speech.up(this,mode); v.performClick(); return true;
+                case MotionEvent.ACTION_CANCEL: speech.cancelIfOwned(this); return true;
                 default: return true;
             }
         });
@@ -276,21 +302,26 @@ public class MainActivity extends Activity {
             line.setContentDescription("Play " + sound.name); line.setOnClickListener(v -> playSound(sound));
         }
         updateHome();
+        FloatingPanelService.sync(this,false);
     }
 
     private void updateHome() {
         if (!"home".equals(page) || micButton == null) return;
-        boolean speaking = live.isActive(), playing = player.active(), recording = recorder.active();
+        boolean speaking = speech.live(), playing = player.active() || speech.playing(), recording = speech.recording();
+        level = speech.level; recordMilliseconds = speech.milliseconds;
         boolean available = AudioRoutes.outer(this) != null;
         int lit = (speaking || recording) ? Math.min(11, (int) Math.round(level * 66)) : 0;
-        String state = holdingMic + "|" + (temporaryRecording != null) + "|" + recording + "|" + recordMilliseconds / 1000 + "|" + speaking + "|" + playing + "|" + available + "|" + playingId + "|" + feedback + "|" + lit;
+        String state = speech.message + SpeakingOptions.mode(this) + holdingMic + "|" + (temporaryRecording != null) + "|" + recording + "|" + recordMilliseconds / 1000 + "|" + speaking + "|" + playing + "|" + available + "|" + playingId + "|" + feedback + "|" + lit;
         if (state.equals(lastHomeState)) return;
         lastHomeState = state;
-        String labelText = recording ? (holdingMic ? "Release to Play" : "Saving WAV…") : "Hold to Speak";
+        int mode = SpeakingOptions.mode(this);
+        String labelText = recording ? (speech.recordMode() == SpeakingOptions.HOLD ? "放手播放" : "停止並播放") : speaking ? "停止即時傳聲" : mode == SpeakingOptions.HOLD ? "按住說話" : mode == SpeakingOptions.RECORD ? "點按錄音" : "開始即時傳聲";
         micLabel.setText(labelText); micButton.setContentDescription(labelText);
-        clickable(micButton, (speaking || recording) ? TEAL : Color.TRANSPARENT, TEAL, 0, true);
+        int accent = recording ? 0xffef5350 : TEAL;
+        clickable(micButton, (speaking || recording) ? accent : Color.TRANSPARENT, accent, 0, true);
         micButton.setTextColor((speaking || recording) ? BG : TEAL);
-        micStatus.setText(!feedback.isEmpty() ? feedback : recording ? "Recording " + recordMilliseconds / 1000 + "s / 180s" : speaking ? "Speaking now" : playing ? "Playing sound…" : "Hold to record • release to play");
+        if (speechAnimating != recording) { speechAnimating = recording; if (recording) HoldFeedback.start(micButton); else HoldFeedback.stop(micButton); }
+        micStatus.setText(recording ? "錄音中 " + recordMilliseconds / 1000 + "s / 180s" : !speech.message.isEmpty() ? speech.message : !feedback.isEmpty() ? feedback : playing ? "Playing sound…" : SpeakingOptions.hint(this));
         routeStatus.setText(available ? "Outer speaker" : "Speaker unavailable");
         routeStatus.setTextColor(available ? WHITE : MUTED);
         for (int i = 0; i < bars.size(); i++) bars.get(i).setBackground(shape(i < lit ? TEAL : LINE, 0, 4, false));
@@ -317,6 +348,7 @@ public class MainActivity extends Activity {
     }
     private void playSound(Sound sound) { playFile(new File(getFilesDir(), sound.id + ".wav"), sound.id); }
     private void playFile(File file, String id) {
+        if (speech != null && speech.busy()) speech.cancel();
         if (live.isActive() || recorder.active()) return;
         if (player.active()) { if (id.equals(playingId)) player.stop(); return; }
         if (!acquireFocus()) return;
@@ -329,6 +361,7 @@ public class MainActivity extends Activity {
         updateHome();
     }
     private void stopAudio() {
+        if (speech != null) speech.cancelIfOwned(this); speechAnimating = false;
         holdingMic = false; HoldFeedback.stop(micButton); live.stop(); player.stop(); recorder.cancel(); recordEpoch++; abandonFocus(); level = 0;
         if ("add".equals(page) && addRecord != null) {
             addRecord.setText("Record"); saveButton.setEnabled(!importing); saveButton.setAlpha(importing ? .4f : 1f);
@@ -594,16 +627,16 @@ public class MainActivity extends Activity {
     }
     private void showCredits() {
         page = "credits"; startPage("Credits", true);
-        LinearLayout content = column(); content.setPadding(px(180), px(25), px(180), px(24));
+        LinearLayout content = column(); content.setPadding(px(72), px(8), px(72), px(12));
         root.addView(content, new LinearLayout.LayoutParams(-1, 0, 1f));
         TextView title = text("Outer Voice", 72, WHITE, true); title.setGravity(Gravity.CENTER);
         SpannableString styledTitle = new SpannableString("Outer Voice");
         styledTitle.setSpan(new ForegroundColorSpan(TEAL), 6, styledTitle.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         title.setText(styledTitle);
-        content.addView(title, new LinearLayout.LayoutParams(-1, px(120)));
+        content.addView(title, new LinearLayout.LayoutParams(-1, px(84)));
         String version = "";
         try { android.content.pm.PackageInfo info = getPackageManager().getPackageInfo(getPackageName(), 0); version = info.versionName + " (" + info.getLongVersionCode() + ")"; } catch (Exception ignored) { }
-        String[][] credits = {{"App version", version}, {"Developer", "Zeca"}, {"Tester", "SL"}, {"Contributors", "Chris, j.Lun"}, {"License", "MIT"}};
+        String[][] credits = {{"App version", version}, {"Developer", "Zeca"}, {"Tester", "SL"}, {"Contributors", "Chris, j.Lun"}, {"License", "GPL-3.0 + upstream notices"}};
         for (String[] credit : credits) {
             LinearLayout line = row();
             line.addView(text(credit[0], 24, WHITE, true), new LinearLayout.LayoutParams(0, px(56), 1f));
@@ -612,8 +645,9 @@ public class MainActivity extends Activity {
             View border = new View(this); border.setBackgroundColor(LINE); content.addView(border, new LinearLayout.LayoutParams(-1, px(1)));
             if ("License".equals(credit[0])) { line.setOnClickListener(v -> showLicense()); line.setClickable(true); }
         }
-        space(content, 22);
-        TextView note = text("Microphone and WAV playback to the outer speaker", 20, MUTED, false); note.setGravity(Gravity.CENTER); content.addView(note);
+        space(content, 10);
+        TextView note = text("Based on Zeekr Shortcut by dts88 (https://github.com/dts88/zeekr-shortcut-car)", 17, MUTED, false);
+        note.setAutoLinkMask(android.text.util.Linkify.WEB_URLS); note.setGravity(Gravity.CENTER); content.addView(note);
     }
     private void showLicense() {
         try (InputStream input = getAssets().open("LICENSE.txt")) {
@@ -691,7 +725,15 @@ public class MainActivity extends Activity {
                 volumeLabel.setText("System media volume: " + audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) + "/" + v.getMax());
             }
         });
-        TextView note = text("BUS12 only • firmware controls amplifier volume\nWAVs use peak normalization (up to ×16).", 17, MUTED, false);
+        TextView gainLabel = text("車外喇叭數碼增益：+" + SpeakingOptions.prefs(this).getInt("external_db",0) + " dB",20,WHITE,true);
+        panel.addView(gainLabel); android.widget.SeekBar gainSlider = new android.widget.SeekBar(this);
+        gainSlider.setContentDescription("車外喇叭數碼增益"); gainSlider.setMax(24); gainSlider.setProgress(SpeakingOptions.prefs(this).getInt("external_db",0));
+        panel.addView(gainSlider,new LinearLayout.LayoutParams(-1,px(48)));
+        gainSlider.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener(){
+            public void onStartTrackingTouch(android.widget.SeekBar v){} public void onStopTrackingTouch(android.widget.SeekBar v){}
+            public void onProgressChanged(android.widget.SeekBar v,int n,boolean user){if(user)SpeakingOptions.prefs(MainActivity.this).edit().putInt("external_db",n).apply();gainLabel.setText("車外喇叭數碼增益：+"+n+" dB");}
+        });
+        TextView note = text("0 至 +24 dB · 套用錄音、已儲存聲音及即時傳聲\n數碼放大，含過載限制；系統音量獨立調整。", 17, MUTED, false);
         panel.addView(note, new LinearLayout.LayoutParams(-1, px(60)));
         LinearLayout actions = row();
         TextView test = button("Test speaker", false), report = button("Diagnostics", false);
@@ -715,7 +757,7 @@ public class MainActivity extends Activity {
     }
     private void toast(String message) { Toast.makeText(this, message == null ? "Operation failed" : message, Toast.LENGTH_LONG).show(); }
     @Override public void onBackPressed() { if (!"home".equals(page)) cancelAdd(); else { stopAudio(); super.onBackPressed(); } }
-    @Override protected void onResume() { super.onResume(); paused = false; main.removeCallbacks(refresh); main.post(refresh); if ("home".equals(page)) FloatingPanelService.sync(this, false); }
+    @Override protected void onResume() { super.onResume(); paused = false; main.removeCallbacks(refresh); main.post(refresh); if ("home".equals(page)) FloatingPanelService.sync(this, false); SmartButtonsService.resume(this); }
     @Override protected void onPause() { paused = true; main.removeCallbacks(refresh); if (live != null) { stopAudio(); deleteTemporary(); if ("add".equals(page) && addRecord != null) { addRecord.setText("Record"); saveButton.setEnabled(!importing); saveButton.setAlpha(importing ? .4f : 1f); recordInfo.setText("Record up to 180 seconds"); } } super.onPause(); }
-    @Override protected void onDestroy() { importEpoch++; if (live != null) stopAudio(); deleteTemporary(); main.removeCallbacksAndMessages(null); if (pendingFile != null) pendingFile.delete(); super.onDestroy(); }
+    @Override protected void onDestroy() { importEpoch++; if (live != null) stopAudio(); if (speech != null) speech.observers.remove(speechChanged); deleteTemporary(); main.removeCallbacksAndMessages(null); if (pendingFile != null) pendingFile.delete(); super.onDestroy(); }
 }

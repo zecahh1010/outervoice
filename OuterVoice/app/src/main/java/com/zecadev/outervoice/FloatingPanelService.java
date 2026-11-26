@@ -16,9 +16,6 @@ import android.content.pm.ServiceInfo;
 import android.graphics.PixelFormat;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
-import android.media.AudioAttributes;
-import android.media.AudioFocusRequest;
-import android.media.AudioManager;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
@@ -33,31 +30,29 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 import java.io.File;
-import java.util.UUID;
 
 /** Genuine system overlay. Its audio lifetime is independent of MainActivity.onPause(). */
 public final class FloatingPanelService extends Service {
     private static final String CHANNEL = "floating_panel", CLOSE = "close", REFRESH = "refresh";
     private final Handler main = new Handler();
-    private final WavRecorder recorder = new WavRecorder(this);
-    private WavPlayer player;
-    private AudioManager audio;
-    private AudioFocusRequest focus;
-    private boolean hasFocus, destroyed, holding;
-    private int epoch, screenW, screenH, size;
+    private VoiceSession speech;
+    private boolean speechAnimating;
+    private final Runnable speechChanged = this::updateSpeech;
+
+    private boolean destroyed;
+    private int screenW, screenH, size;
     private int micEnlargement;
     private WindowManager windows;
     private WindowManager.LayoutParams params;
     private View panel;
     private HorizontalScrollView soundScroll;
     private TextView mic, status;
-    private File temporary;
     private Typeface icons, font;
     private FloatingConfig config;
     private boolean minimized, transitioning, gestureActive, confirmingClose;
     private final Runnable autoMinimize = () -> {
         if (destroyed || minimized || panel == null || !config.autoMinimize) return;
-        if (holding || recorder.active() || player.active() || gestureActive || transitioning || confirmingClose) main.postDelayed(this.autoMinimize, 250);
+        if (speech.busy() || gestureActive || transitioning || confirmingClose) main.postDelayed(this.autoMinimize, 250);
         else transitionPanel(true);
     };
     private void armAutoMinimize() {
@@ -82,16 +77,9 @@ public final class FloatingPanelService extends Service {
     @Override public void onCreate() {
         super.onCreate();
         windows = (WindowManager) getSystemService(WINDOW_SERVICE);
-        audio = (AudioManager) getSystemService(AUDIO_SERVICE);
-        player = new WavPlayer(this);
+        speech = VoiceSession.get(this); speech.observers.add(speechChanged);
         icons = Typeface.createFromAsset(getAssets(), "MaterialIcons-Regular.ttf");
         font = Typeface.createFromAsset(getAssets(), "Inter.ttf");
-        focus = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
-            .setAudioAttributes(new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
-            .setOnAudioFocusChangeListener(change -> {
-                if (change < 0) { cancelAudio(); show("Audio interrupted"); }
-            }, main).build();
         // Only overlay-owned stale clips are cleaned; Activity recordings use another prefix.
         File[] stale = getCacheDir().listFiles((dir, name) -> name.startsWith("floating-voice-"));
         if (stale != null) for (File file : stale) file.delete();
@@ -137,7 +125,7 @@ public final class FloatingPanelService extends Service {
     private LinearLayout circle(FloatingConfig.Item item, int diameter, int largest) {
         LinearLayout column = new LinearLayout(this); column.setOrientation(LinearLayout.VERTICAL); column.setGravity(Gravity.CENTER);
         SoundIcon button = new SoundIcon(this, icons, item.icon, item.isLive(), Math.round(diameter * .45f), item.foreground());
-        button.setBackground(shape(item.buttonColor(), true)); button.setContentDescription(item.isLive() ? "Hold Live Speak to record; release to play" : "Play " + item.name);
+        button.setBackground(shape(item.buttonColor(), true)); button.setContentDescription(item.isLive() ? SpeakingOptions.hint(this) : "Play " + item.name);
         button.setClickable(true); button.setFocusable(true);
         LinearLayout.LayoutParams position = new LinearLayout.LayoutParams(diameter, diameter); position.topMargin = (largest - diameter) / 2; column.addView(button, position);
         TextView name = text(item.name, Math.max(12, Math.min(17, size / 6)), 0xfff6f9fa); name.setMaxLines(2);
@@ -147,12 +135,12 @@ public final class FloatingPanelService extends Service {
     private GradientDrawable controlShape(int color, int border) { GradientDrawable d = shape(color, false); d.setCornerRadius(9); d.setStroke(1, border); return d; }
     private void buildPanel() {
         main.removeCallbacks(autoMinimize); transitioning = false; gestureActive = false;
-        if (panel != null) { panel.animate().cancel(); windows.removeView(panel); panel = null; }
+        if (panel != null) { HoldFeedback.stop(mic); speechAnimating = false; panel.animate().cancel(); windows.removeView(panel); panel = null; }
         mic = null; status = null; soundScroll = null;
         config = FloatingConfig.load(this); size = config.size; micEnlargement = config.micEnlargement;
         DisplayMetrics metrics = new DisplayMetrics(); windows.getDefaultDisplay().getRealMetrics(metrics); screenW = metrics.widthPixels; screenH = metrics.heightPixels;
         minimized = FloatingConfig.prefs(this).getBoolean("minimized", false);
-        if (minimized) { buildBubble(); return; }
+        if (minimized) { buildBubble(); updateSpeech(); return; }
         int largest = config.diameter(true), count = 0, total = 0;
         for (FloatingConfig.Item item : config.items) if (item.selected) { if (count++ > 0) total += config.spacing; total += config.diameter(item.isLive()); }
         final int width = Math.min(screenW - 16, Math.max(252, total + 30));
@@ -182,7 +170,7 @@ public final class FloatingPanelService extends Service {
                 default:return true;}});
             }else sound.getChildAt(0).setOnClickListener(v->playSound(item));
         }
-        status=text("Hold Live Speak; release to play",12,0xffaebcc7);status.setMaxLines(1);content.addView(status,new LinearLayout.LayoutParams(-1,20));panel=content;
+        status=text(SpeakingOptions.hint(this),12,0xffaebcc7);status.setMaxLines(1);content.addView(status,new LinearLayout.LayoutParams(-1,20));panel=content;
         params=new WindowManager.LayoutParams(width,largest+158,WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,PixelFormat.TRANSLUCENT);params.gravity=Gravity.TOP|Gravity.LEFT;params.alpha=.8f;
         params.x=FloatingConfig.prefs(this).getInt("x",24);params.y=FloatingConfig.prefs(this).getInt("y",Math.max(0,screenH-params.height-24));clamp();windows.addView(panel,params);
         scroll.addOnLayoutChangeListener(new View.OnLayoutChangeListener(){@Override public void onLayoutChange(View v,int l,int t,int r,int b,int ol,int ot,int or,int ob){scroll.removeOnLayoutChangeListener(this);scroll.scrollTo(FloatingConfig.prefs(FloatingPanelService.this).getInt("strip_scroll",0),0);}});
@@ -190,7 +178,7 @@ public final class FloatingPanelService extends Service {
             case MotionEvent.ACTION_DOWN:cancelAudio();x=e.getRawX();y=e.getRawY();startX=params.x;startY=params.y;return true;
             case MotionEvent.ACTION_MOVE:params.x=startX+Math.round(e.getRawX()-x);params.y=startY+Math.round(e.getRawY()-y);clamp();windows.updateViewLayout(panel,params);return true;
             case MotionEvent.ACTION_UP:case MotionEvent.ACTION_CANCEL:FloatingConfig.prefs(FloatingPanelService.this).edit().putInt("x",params.x).putInt("y",params.y).apply();return true;
-            default:return true;}}});armAutoMinimize();
+            default:return true;}}});updateSpeech();armAutoMinimize();
     }
     private void buildBubble() {
         int d=config.minimizedSize;boolean speak=config.liveOnly();
@@ -206,7 +194,7 @@ public final class FloatingPanelService extends Service {
             default:return true;}}});
     }
     private void saveBubblePosition(){FloatingConfig.prefs(this).edit().putInt("bubble_x",params.x).putInt("bubble_y",params.y).apply();}
-    private void finishRecording(){if(holding){holding=false;recorder.stop();HoldFeedback.stop(mic);show("Saving WAV…");}armAutoMinimize();}
+    private void finishRecording(){speech.up(this,SpeakingOptions.mode(this));armAutoMinimize();}
     private void transitionPanel(boolean minimize){
         if(transitioning||panel==null)return;cancelAudio();main.removeCallbacks(autoMinimize);transitioning=true;
         int d=config.minimizedSize;long duration=ValueAnimator.areAnimatorsEnabled()?320:0;
@@ -244,70 +232,19 @@ public final class FloatingPanelService extends Service {
         params.x = Math.max(0, Math.min(params.x, Math.max(0, screenW - params.width)));
         params.y = Math.max(0, Math.min(params.y, Math.max(0, screenH - params.height)));
     }
-    private boolean acquireFocus() {
-        AudioOwner.claim(this, this::cancelAudio);
-        if (!hasFocus) hasFocus = audio.requestAudioFocus(focus) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
-        if (!hasFocus) { AudioOwner.release(this); show("Audio is busy; try again"); }
-        return hasFocus;
-    }
-    private void releaseFocus() {
-        if (hasFocus) audio.abandonAudioFocusRequest(focus);
-        hasFocus = false; AudioOwner.release(this);
-    }
-    private void beginRecording() {
-        if (recorder.active()) return;
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            show("Open Outer Voice to allow microphone access"); return;
+    private void beginRecording() { speech.down(this, SpeakingOptions.mode(this)); }
+    private void playSound(FloatingConfig.Item item) { speech.playSaved(this,item.id,item.name); }
+    private void cancelAudio() { if (speech != null) speech.cancelIfOwned(this); }
+    private void updateSpeech() {
+        if (destroyed) return;
+        boolean recording = speech.recording();
+        if (mic != null) {
+            mic.setBackground(shape(recording ? 0xffef5350 : config.live().buttonColor(),true));
+            mic.setContentDescription(recording ? "Recording; tap to stop and play" : SpeakingOptions.hint(this));
+            if (speechAnimating != recording) { speechAnimating = recording; if (recording) HoldFeedback.start(mic); else HoldFeedback.stop(mic); }
         }
-        cancelAudio();
-        int token = epoch;
-        if (!acquireFocus()) return;
-        holding = true; HoldFeedback.start(mic); show("Recording • release to play");
-        File file = new File(getCacheDir(), "floating-voice-" + UUID.randomUUID() + ".wav");
-        recorder.start(file, new WavRecorder.Listener() {
-            @Override public void meter(double level, long milliseconds) { main.post(() -> {
-                if (token == epoch && holding) show("Recording " + milliseconds / 1000 + "s • release to play");
-            }); }
-            @Override public void done(File completed, String error) { main.post(() -> {
-                if (destroyed || token != epoch) { if (completed != null) completed.delete(); return; }
-                holding = false; HoldFeedback.stop(mic);
-                if (error != null || completed == null) { releaseFocus(); show(error == null ? "Recording cancelled" : error); return; }
-                temporary = completed;
-                try {
-                    WavFormat format = WavFormat.read(completed);
-                    AudioDiagnostics.log("Floating WAV saved: " + format.rate + " Hz channels=" + format.channels + "; PCM16 bytes=" + format.bytes);
-                } catch (Exception failure) { releaseFocus(); show("Could not save WAV"); deleteTemporary(); return; }
-                // Wait for a stopped previous WAV worker before starting the new clip.
-                playWhenReady(completed, "Live Speak", token, 0);
-            }); }
-        });
-    }
-    private void playSound(FloatingConfig.Item item) {
-        cancelAudio(); int token = epoch;
-        File file = new File(getFilesDir(), item.id + ".wav");
-        if (!file.isFile()) { show("Sound was removed"); return; }
-        if (acquireFocus()) playWhenReady(file, item.name, token, 0);
-    }
-    private void playWhenReady(File file, String name, int token, int attempt) {
-        if (destroyed || token != epoch) return;
-        if (player.active()) {
-            if (attempt < 100) main.postDelayed(() -> playWhenReady(file, name, token, attempt + 1), 20);
-            else { releaseFocus(); show("Playback is busy; try again"); }
-            return;
-        }
-        show("Playing " + name);
-        try {
-            player.play(file, error -> main.post(() -> {
-                if (destroyed || token != epoch) return;
-                releaseFocus(); show(error == null ? "Hold Live Speak; release to play" : error);
-                deleteTemporary(); armAutoMinimize();
-            }));
-        } catch (RuntimeException e) { releaseFocus(); AudioDiagnostics.log("Floating playback: " + e.getMessage()); show(e.getMessage()); deleteTemporary(); }
-    }
-    private void deleteTemporary() { if (temporary != null) temporary.delete(); temporary = null; }
-    private void cancelAudio() {
-        epoch++; holding = false; recorder.cancel(); player.stop(); releaseFocus(); deleteTemporary();
-        HoldFeedback.stop(mic);
+        show(recording ? "Recording " + speech.milliseconds / 1000 + "s / 180s" : speech.message.isEmpty() ? SpeakingOptions.hint(this) : speech.message);
+        armAutoMinimize();
     }
     private void show(String message) {
         if (status != null) status.setText(message == null ? "Audio failed" : message);
@@ -320,7 +257,7 @@ public final class FloatingPanelService extends Service {
         super.onConfigurationChanged(config); cancelAudio(); buildPanel();
     }
     @Override public void onDestroy() {
-        destroyed = true; main.removeCallbacksAndMessages(null); cancelAudio();
+        destroyed = true; main.removeCallbacksAndMessages(null); cancelAudio(); speech.observers.remove(speechChanged); HoldFeedback.stop(mic);
         if (panel != null) { try { windows.removeView(panel); } catch (RuntimeException ignored) { } panel = null; }
         stopForeground(true); super.onDestroy();
     }

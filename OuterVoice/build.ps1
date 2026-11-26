@@ -24,6 +24,10 @@ Check-Exit 'WAV writing and normalization tests'
 Check-Exit 'PCM import test compilation'
 & $java -cp (Join-Path $build 'tests') PcmImportTest
 Check-Exit 'PCM import conversion tests'
+& $javac -encoding UTF-8 -d (Join-Path $build 'tests') (Join-Path $projectRoot 'app/src/main/java/com/zecadev/outervoice/Accessory.java') (Join-Path $projectRoot 'app/src/main/java/com/zecadev/outervoice/SmartButtonAd.java') (Join-Path $projectRoot 'app/src/main/java/com/zecadev/outervoice/ExteriorGain.java') (Join-Path $projectRoot 'tests/SmartButtonAudioTest.java')
+Check-Exit 'Smart button and output gain test compilation'
+& $java -cp (Join-Path $build 'tests') com.zecadev.outervoice.SmartButtonAudioTest
+Check-Exit 'Smart button protocol and output gain tests'
 if ($TestOnly) { return }
 # Remove stale compiler outputs without touching source or signing material.
 foreach ($outputDirectory in @((Join-Path $build 'classes'), (Join-Path $build 'dex'))) {
@@ -59,7 +63,7 @@ if (-not (Test-Path -LiteralPath $key)) {
     & (Join-Path $jdk 'bin/keytool.exe') -genkeypair -keystore $key -storetype JKS -storepass:file $passwordFile -keypass:file $passwordFile -alias outervoice -keyalg RSA -keysize 3072 -validity 10000 -dname 'CN=Zeca, OU=Outer Voice'
     Check-Exit 'Signing key creation'
 }
-$apk = Join-Path $dist 'OuterVoice-1.4.2.apk'
+$apk = Join-Path $dist 'OuterVoice-1.5.0.apk'
 & $java -jar (Join-Path $sdkBuild 'lib/apksigner.jar') sign --ks $key --ks-key-alias outervoice --ks-pass "file:$passwordFile" --out $apk $aligned
 Check-Exit 'APK signing'
 & $java -jar (Join-Path $sdkBuild 'lib/apksigner.jar') verify --verbose --print-certs $apk
@@ -67,5 +71,5 @@ Check-Exit 'APK signature verification'
 & (Join-Path $sdkBuild 'zipalign.exe') -c 4 $apk
 Check-Exit 'APK alignment verification'
 $digest = (Get-FileHash -LiteralPath $apk -Algorithm SHA256).Hash.ToLowerInvariant()
-[System.IO.File]::WriteAllText((Join-Path $dist 'SHA256.txt'), "$digest  OuterVoice-1.4.2.apk`n", (New-Object System.Text.UTF8Encoding($false)))
+[System.IO.File]::WriteAllText((Join-Path $dist 'SHA256.txt'), "$digest  OuterVoice-1.5.0.apk`n", (New-Object System.Text.UTF8Encoding($false)))
 Write-Output "APK built: $apk"
