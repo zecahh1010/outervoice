@@ -1,0 +1,21 @@
+# Outer Voice 1.5.1
+
+Build 12, 2026-11-27. Signed with the retained update certificate; install over 1.5.0 without uninstalling to keep sounds, 靈動貼 bindings and settings.
+
+1. Switching to **靈動貼** keeps the existing floating panel/bubble and service alive. It no longer explicitly stops the overlay. Move the overlay if it covers a setting.
+2. BLE listening now follows the upstream PendingIntent approach, using a stable, non-exported receiver and a dedicated BLE worker. Registration attempts always clean up first and wait 500 ms; retries are rate limited to three starts per 30 seconds. Sleep releases the scan/GATT resources after 40 seconds of screen-off; screen-on settles for 10 seconds before re-registering. Bluetooth state is also polled, and discovery/phone-link changes trigger a fresh registration. A scan is renewed before the Android long-running scan downgrade. Counters are persisted, bindings are retained, and GATT-ready/disconnect resets the advertisement counter as appropriate.
+3. The previously omitted upstream `StaleGatt` recovery is included. It checks binder liveness and replaces only dead references in the application's container wrapper with a fresh system GATT service; live references are not replaced and no system Bluetooth power toggle is performed. Hidden-interface access can be rejected by firmware; that outcome is recorded in diagnostics. This is a targeted implementation for the upstream-described VLite sleep failure, not a universal guarantee about every error 2.
+4. The minimized microphone now observes recording even when saved sounds are selected. Its circle becomes red and uses the existing recording ring/pulse. Repeated normal status/meter callbacks no longer create Toasts, including “Ready to speak” and Live microphone route strings. Status and errors remain available on the screen and in diagnostics.
+5. Live Speak now uses the local **MiclessKaraoke** capture policy: default raw/compatibility source (`UNPROCESSED` when advertised, otherwise `VOICE_RECOGNITION`), native rate with 48/44.1 kHz alternatives, urgent-audio worker, burst-sized blocks, low-latency output request, small buffers, nonblocking partial writes and route checks. Live mode no longer requests transient Android audio focus. The release still outputs only to the verified exterior `BUS12_OUTER_NOTIFY` route.
+
+## Live Speak setup
+
+Open **Audio settings → Live 麥克風設定**. Start with **原始／相容（無麥 K 歌）**. The alternatives are 即時唱K (Android 10+) and the legacy standard MIC source. Source/input changes apply on the next start.
+
+Select the same working microphone/input port used in MiclessKaraoke if automatic selection is silent. Rows show meaningful role, list number, Android ID and available port details; no physical seat position is inferred from an index. Ambiguous ports after a reboot require explicit reselection. The chosen Live input is separate from record-then-play's existing working capture path.
+
+Live microphone digital gain has its own 0..+24 dB control, default 0 dB, in addition to the existing exterior-speaker gain. Gain cannot create a missing input signal. The Live settings/diagnostics show input RMS, output peak, PCM frames, source, rate and routed device IDs. Zero input is reported in the UI rather than continuously popping route strings.
+
+The sources were compared with upstream `dts88/zeekr-shortcut-car` HEAD on 2026-11-27; it remained `5d9d8a872e459aed49d657a94c55eaeafbf5155d`. Relevant recovery source: [SmartButtons](https://github.com/dts88/zeekr-shortcut-car/blob/5d9d8a872e459aed49d657a94c55eaeafbf5155d/app/src/main/java/com/kooo/evcam/button/SmartButtons.java), [StaleGatt](https://github.com/dts88/zeekr-shortcut-car/blob/5d9d8a872e459aed49d657a94c55eaeafbf5155d/app/src/main/java/com/kooo/evcam/button/StaleGatt.java). Android documents the [PendingIntent scan API](https://developer.android.com/reference/android/bluetooth/le/BluetoothLeScanner) and [registration error codes](https://developer.android.com/reference/android/bluetooth/le/ScanCallback). Existing GPL/section 7 attribution and corresponding source accompany this release.
+
+See `validation-v1.5.1.md` for the tested scope. OEM sleep, actual stale-container recovery, exterior audibility and live latency still require retesting on the car.

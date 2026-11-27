@@ -1,7 +1,7 @@
-Outer Voice 1.5.0 combined release: GPL-3.0-only with upstream section 7 terms.
+Outer Voice 1.6.0 combined release: GPL-3.0-only with upstream section 7 terms.
 Based on Zeekr Shortcut by dts88 (https://github.com/dts88/zeekr-shortcut-car)
 Modified version for Outer Voice; not the original Zeekr Shortcut.
-Source accompanies the APK as OuterVoice-1.5.0-source.zip.
+Source accompanies the APK as OuterVoice-1.6.0-source.zip.
 
 Original Outer Voice notices:
 MIT License
@@ -919,3 +919,5 @@ dts88 为本项目写的代码，在 GPL-3.0 之外附加两条：
 > it displays (for an app, its About or credits screen) and reasonably visible to users, the line
 > "ntfy alerts designed by Fab (Fabbbrrr) - https://github.com/Fabbbrrr" (or its translation), and must keep that line
 > in the headers of those source files. This term applies from the commit that adds it onward.
+
+Outer Voice 1.5.1 (2026-11-27): StaleGatt.java ported from the same upstream commit with the package changed. PendingIntent scan, recovery scheduling and receiver adapted for Outer Voice. Capture-mode, port-identity and live PCM implementation follow the local MiclessKaraoke app.

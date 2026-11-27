@@ -1,0 +1,25 @@
+PASS two primary tabs are speaking and settings
+PASS old top settings/info shortcuts are removed
+PASS home has a read-only mode label instead of a settings dropdown
+PASS Settings tab opens and is selected
+PASS settings group is discoverable: 傳聲方式
+PASS settings group is discoverable: Live 麥克風
+PASS settings group is discoverable: 音量及增益
+PASS settings group is discoverable: 懸浮面板
+PASS settings group is discoverable: 靈動貼
+PASS settings group is discoverable: 測試及關於
+PASS mode selection saves and returns to Settings
+PASS screen mode change preserves smart button assignment
+PASS Live microphone settings return to the hub
+PASS separate output and microphone gains are retained
+PASS smart buttons open as a Settings child with a return action
+PASS smart button return action restores the hub
+PASS speaker test, diagnostics and About are grouped
+PASS About is reachable from Settings
+PASS About Back returns to its tools parent
+PASS tools Back returns to Settings
+PASS floating service survives Settings-to-smart-buttons navigation
+PASS changing mode inside Settings preserves remote recording
+PASS floating editor Cancel returns to Settings without losing enabled state
+PASS speaking tab returns to operational home
+BOUNDARY: native UI/navigation verification only; audio/BLE car verification remains documented separately.

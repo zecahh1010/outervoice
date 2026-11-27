@@ -7,7 +7,8 @@ $platform = (Get-ChildItem (Join-Path $tools 'android-platform') -Directory | Se
 $out = Join-Path $root 'build/native-probe'
 New-Item -ItemType Directory -Force $out,(Join-Path $out 'classes'),(Join-Path $out 'dex') | Out-Null
 function Check($step) { if ($LASTEXITCODE -ne 0) { throw "$step failed" } }
-& (Join-Path $jdk 'bin/javac.exe') -encoding UTF-8 --release 8 -cp (Join-Path $platform 'android.jar') -d (Join-Path $out 'classes') (Join-Path $PSScriptRoot 'VoiceProbe.java')
+$probeSources = @(Get-ChildItem -LiteralPath $PSScriptRoot -Filter '*.java' | ForEach-Object FullName)
+& (Join-Path $jdk 'bin/javac.exe') -encoding UTF-8 --release 8 -cp (Join-Path $platform 'android.jar') -d (Join-Path $out 'classes') @probeSources
 Check 'Probe compilation'
 $classes = @(Get-ChildItem (Join-Path $out 'classes') -Recurse -Filter '*.class' | ForEach-Object FullName)
 & (Join-Path $jdk 'bin/java.exe') -cp (Join-Path $sdk 'lib/d8.jar') com.android.tools.r8.D8 --lib (Join-Path $platform 'android.jar') --min-api 28 --output (Join-Path $out 'dex') @classes

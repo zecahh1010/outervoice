@@ -11,3 +11,7 @@ The combined release is distributed under GPL-3.0-only with dts88's applicable G
 Original Outer Voice MIT notices are retained in `LICENSE-MIT.txt`. Font and other bundled asset notices remain under `app/src/main/assets`. The About/Credits page displays the required attribution and bundled license text.
 
 Corresponding source, assets, native tests and build scripts accompany the APK in `OuterVoice-1.5.0-source.zip`. Private signing keys/passwords are not included. A new builder supplies their own signing key, JDK and Android SDK; replacing an installed APK using its existing identity requires the original signing certificate.
+
+## 1.5.1 changes, 2026-11-27
+
+`StaleGatt.java` is ported from the same pinned upstream commit, retaining its header and dead-wrapper-only replacement logic (package changed). `ButtonScanner`, `ButtonScanReceiver` and `BleScanLoop` adapt the upstream PendingIntent, cleanup/settlement/rate-limit and sleep recovery design to Outer Voice. The APK credits and GPL/section 7 terms continue to apply. Live capture policy and port identity follow the local MiclessKaraoke implementation; no MiclessKaraoke files are modified.

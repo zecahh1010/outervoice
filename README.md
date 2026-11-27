@@ -2,11 +2,26 @@
 
 Native Android app for a 1024 × 600 landscape vehicle head unit. Developer: Zeca. Tester credit: SL. Contributors: Chris and j.Lun.
 
-[Download v1.5.0 APK](OuterVoice/dist/OuterVoice-1.5.0.apk) · [Corresponding source ZIP](OuterVoice/dist/OuterVoice-1.5.0-source.zip) · [Release notes](OuterVoice/release-notes-v1.5.0.md) · [App documentation](OuterVoice/README.md) · [Validation](OuterVoice/validation-v1.5.0.md)
+[Download v1.6.0 APK](OuterVoice/dist/OuterVoice-1.6.0.apk) · [Corresponding source ZIP](OuterVoice/dist/OuterVoice-1.6.0-source.zip) · [Release notes](OuterVoice/release-notes-v1.6.0.md) · [App documentation](OuterVoice/README.md) · [Validation](OuterVoice/validation-v1.6.0.md)
 
-Android 9/API 28 or later; package `com.zecadev.outervoice`; version **1.5.0 (build 11)**. The APK uses the retained signing certificate. Install it over the existing app to preserve saved sounds and settings.
+Android 9/API 28 or later; package `com.zecadev.outervoice`; version **1.6.0 (build 14)**. The APK uses the retained signing certificate. Install it over the existing app to preserve saved sounds and settings.
 
-## What's new in v1.5.0
+## What's new in v1.6.0
+
+All configuration lives in the **設定** tab: speaking mode, Live microphone, sound levels/gains, floating panel, 靈動貼 and test/About tools. Current values appear in the list. The old top settings icons and operational-home mode dropdown are removed, while existing settings and independent physical-button assignments are retained.
+
+## Terminology retained from v1.5.2
+
+The Live microphone choices are named for external speaking: **原始／相容**, **低延遲傳聲**, **標準麥克風**. Karaoke wording is removed from the product interface. The v1.5.1 audio/BLE fixes and existing capture settings remain.
+
+## Fixes included from v1.5.1
+
+- Car-test fixes: keep the floating panel on the 靈動貼 tab, animate the minimized multi-sound bubble and stop repeated status Toasts.
+- BLE recovery now includes upstream PendingIntent registration, cleanup/rate limits, sleep/wake settlement and dead-container GATT replacement.
+- Live Speak follows MiclessKaraoke's capture, native-rate, buffer and no-focus-stealing policy. Its settings add input-port selection and microphone digital gain. Actual car sleep recovery and exterior audibility still need retesting.
+- See [release notes](OuterVoice/release-notes-v1.5.1.md) and [verification boundaries](OuterVoice/validation-v1.5.1.md).
+
+## Features introduced in v1.5.0
 
 - **Three speaking modes:** hold/release/play, tap/record/tap/stop/play, or Live Speak for real-time microphone output. Screen and floating controls share this setting.
 - **Zeekr 靈動貼:** a dedicated tab for pairing, naming and independent per-device single-press assignments. Single press defaults to record/stop/play; alternatives include Live Speak, a selected saved sound, stop audio and no action. Double press plays a selected saved sound. Physical-button assignments never force the screen setting to change.
@@ -22,7 +37,7 @@ Android 9/API 28 or later; package `com.zecadev.outervoice`; version **1.5.0 (bu
 - **Minimize and restore:** move the panel using its dedicated handle, or drag the minimized microphone bubble. Optional auto-minimize uses an inactivity timeout of 1–3600 seconds, initially 30 seconds when enabled, and waits during recording or playback. With only the microphone selected, the minimized bubble operates directly using the chosen speaking mode. Layout, position and minimized state persist across restarts.
 - **Saved sounds:** import WAV, MP3 or other device-decodable audio, or record the microphone. Play/Stop lets you preview an imported sound through the outer speaker before saving. Imports convert to the existing player's PCM WAV format; sounds persist across restarts.
 - **Edit List:** stage rename, reorder and confirmed deletion, then Save Changes to apply them. Cancel or Back discards the draft. Renaming preserves floating-panel customization; deleted sounds are removed from the panel.
-- **App controls:** the touch/ripple icon opens floating settings. Exit stops audio, disables the floating panel and closes the app.
+- **App controls:** Settings → 懸浮面板 opens the panel editor. Exit stops audio, disables the floating panel and closes the app.
 - Independent 靈動貼 assignments, Android media-volume controls, exterior digital gain, speaker test and copyable audio-routing diagnostics.
 
 ## Installation
@@ -37,13 +52,13 @@ The built-in browser requires file-access permission and can show storage readab
 
 ## Validation and hardware status
 
-v1.5.0 retains strict BUS12 routing. Completed checks and verification boundaries are recorded in [v1.5.0 validation](OuterVoice/validation-v1.5.0.md), with the [native regression report](OuterVoice/qa/v150-native/v150-probe.txt). Earlier checks remain in the [historical validation log](OuterVoice/validation.md).
+v1.6.0 retains strict BUS12 routing. Completed checks and verification boundaries are recorded in [v1.6.0 validation](OuterVoice/validation-v1.6.0.md), with the [native regression report](OuterVoice/qa/v160-native/v160-probe.txt). Earlier checks remain in the [historical validation log](OuterVoice/validation.md).
 
 Audible external-speaker output, microphone quality, external-storage access and firmware-specific overlay behavior still require the actual head unit.
 
 ## Proposed enhancements
 
-These are discussion proposals, not features included in v1.5.0 or commitments to a release date. Suggested first priorities are backup/restore, a floating Stop control and saved panel profiles.
+These are discussion proposals, not features included in v1.6.0 or commitments to a release date. Suggested first priorities are backup/restore, a floating Stop control and saved panel profiles.
 
 | Proposal | Intended behavior |
 |---|---|
@@ -59,6 +74,6 @@ These are discussion proposals, not features included in v1.5.0 or commitments t
 
 The application and build script are in [OuterVoice](OuterVoice/README.md). Build with the documented local Java/Android toolchain; portable tool downloads and private signing material are excluded from Git. The retained signing key is required to produce compatible future updates.
 
-The combined v1.5.0 release is GPL-3.0-only with the applicable upstream GPL section 7 terms. Based on Zeekr Shortcut by dts88 (https://github.com/dts88/zeekr-shortcut-car), pinned at `5d9d8a872e459aed49d657a94c55eaeafbf5155d`. This is a modified Outer Voice application, not the original Zeekr Shortcut.
+The combined v1.6.0 release is GPL-3.0-only with the applicable upstream GPL section 7 terms. Based on Zeekr Shortcut by dts88 (https://github.com/dts88/zeekr-shortcut-car), pinned at `5d9d8a872e459aed49d657a94c55eaeafbf5155d`. This is a modified Outer Voice application, not the original Zeekr Shortcut.
 
 See [notices](OuterVoice/NOTICE.md), [upstream terms](OuterVoice/UPSTREAM-NOTICE.md) and [GPL-3.0](LICENSE). Original [repository MIT notices](LICENSE-MIT.txt), [Outer Voice MIT notices](OuterVoice/LICENSE-MIT.txt), Material Icons and Inter font licenses are retained. Private signing material is excluded from Git and the corresponding source archive.

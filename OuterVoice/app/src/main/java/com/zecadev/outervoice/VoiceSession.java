@@ -75,6 +75,7 @@ final class VoiceSession {
         if (app.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) { status("Open Outer Voice to allow microphone access"); return false; }
         if (recorder.active() || live.isActive()) { status("Microphone is finishing; try again"); return false; }
         cancel(); AudioOwner.claim(this, this::cancel); owner = o; activeMode = mode;
+        if (mode == SpeakingOptions.LIVE) return true; // Same no-focus-stealing policy as MiclessKaraoke.
         focused = audio.requestAudioFocus(focus) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
         if (!focused) { release(); status("Audio is busy; try again"); }
         return focused;

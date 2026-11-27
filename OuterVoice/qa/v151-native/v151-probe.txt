@@ -1,0 +1,23 @@
+PASS floating foreground service is running
+PASS Smart Buttons tab preserves the same floating service
+PASS smart-button dispatch starts recording
+PASS multi-sound minimized bubble turns red while recording
+PASS multi-sound minimized bubble visibly animates across rendered frames
+PASS repeated idle/meter status updates produce no Toasts
+PASS PendingIntent BLE scanner is installed
+PASS PendingIntent BLE registration succeeds on Android 13
+PASS injected error2 cleans up and re-registers without restarting the app
+PASS park releases BLE registration
+PASS wake re-registers after service settlement
+PASS wake recovery preserves the paired device binding
+PASS Live Speak does not request or steal Android audio focus
+PASS emulator-only PCM backend target is available
+PASS actual Android PCM capture/write/release streams in compat mode (emulator speaker only)
+DETAIL Live source=VOICE_RECOGNITION (6); rate=48000; PCM frames=67680; input RMS=5.285799583645255E-5; output peak=6.103515625E-5; Live microphone stopped
+PASS actual Android PCM capture/write/release streams in performance mode (emulator speaker only)
+DETAIL Live source=VOICE_PERFORMANCE (10); rate=48000; PCM frames=64420; input RMS=1.4920619975067223E-4; output peak=2.44140625E-4; Live microphone stopped
+PASS actual Android PCM capture/write/release streams in standard mode (emulator speaker only)
+DETAIL Live source=MIC (1); rate=48000; PCM frames=68400; input RMS=1.3817421170253627E-4; output peak=2.44140625E-4; Live microphone stopped
+PASS explicit Live microphone selection resolves the chosen port
+PASS Live microphone configuration dialog renders as a native window
+BOUNDARY: native PCM uses an explicit emulator-speaker target via the test harness; the release has no BUS12 fallback. Actual Zeekr sleep, stale VLite binder, acoustics and latency need car retesting.

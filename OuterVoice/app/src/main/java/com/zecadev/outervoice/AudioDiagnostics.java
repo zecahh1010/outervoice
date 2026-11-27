@@ -27,6 +27,7 @@ final class AudioDiagnostics {
             out.append("Microphone muted: ").append(manager.isMicrophoneMute()).append('\n');
             for (AudioDeviceInfo device : manager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)) out.append("Output: ").append(AudioRoutes.describe(device)).append('\n');
         }
+        out.append(LiveMicPassthrough.lastReport).append("\n");
         out.append("Selected: ").append(AudioRoutes.describe(AudioRoutes.outer(context))).append('\n');
         out.append("Preferred-device acceptance and routing do not prove amplifier output.\n\nSession events:\n").append(events);
         return out.toString();

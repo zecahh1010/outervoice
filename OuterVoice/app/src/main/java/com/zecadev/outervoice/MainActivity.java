@@ -47,6 +47,9 @@ public class MainActivity extends Activity {
     private final ArrayList<Sound> sounds = new ArrayList<>();
     private final ArrayList<TextView> rows = new ArrayList<>();
     private final ArrayList<View> bars = new ArrayList<>();
+    private final ArrayList<TextView> settingsSummaries = new ArrayList<>();
+    private String settingsSignature = "";
+    private long settingsRefreshedAt;
     private ArrayList<Sound> editDraft;
     private ScrollView editScroll;
     private Typeface icons;
@@ -79,7 +82,7 @@ public class MainActivity extends Activity {
     private TextView previewPlay;
     private final Runnable refresh = new Runnable() {
         @Override public void run() {
-            updateHome(); updatePreview();
+            updateHome(); updatePreview(); updateSettings();
             if (!live.isActive() && !player.active() && !recorder.active()) abandonFocus();
             if (!paused) main.postDelayed(this, 120);
         }
@@ -174,69 +177,118 @@ public class MainActivity extends Activity {
         header.addView(heading, new LinearLayout.LayoutParams(0, -1, 1f));
         return header;
     }
-    private void addTabs(boolean buttons) {
+    private void addTabs(boolean settings) {
         LinearLayout tabs = row(); tabs.setPadding(px(24), px(6), px(24), px(6));
         for (int i = 0; i < 2; i++) {
-            final boolean selected = i == 1;
-            TextView tab = button(i == 0 ? "收音／聲音" : "靈動貼", selected == buttons);
+            final boolean settingsTab = i == 1;
+            TextView tab = button(i == 0 ? "傳聲／聲音" : "設定", settingsTab == settings);
+            tab.setSelected(settingsTab == settings);
             tab.setTextSize(TypedValue.COMPLEX_UNIT_PX, px(19));
             LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(px(174), px(48)); p.rightMargin = px(12); tabs.addView(tab,p);
-            tab.setOnClickListener(v -> { stopAudio(); if (selected) showSmartButtons(); else showHome(); });
+            tab.setOnClickListener(v -> { stopAudio(); if (settingsTab) showSettings(); else showHome(); });
         }
         root.addView(tabs,new LinearLayout.LayoutParams(-1,px(60)));
     }
+    private LinearLayout mainHeader() {
+        LinearLayout header=startPage("Outer Voice",false);
+        boolean available=AudioRoutes.outer(this)!=null;
+        routeStatus=text(available?"Outer speaker":"Speaker unavailable",18,available?WHITE:MUTED,true);
+        header.addView(routeStatus,new LinearLayout.LayoutParams(px(170),px(48)));
+        TextView exit=icon("\ue8ac",30,WHITE);exit.setContentDescription("Exit app");
+        clickable(exit,Color.TRANSPARENT,0,8,false);header.addView(exit,new LinearLayout.LayoutParams(px(48),px(48)));
+        exit.setOnClickListener(v->{
+            FloatingConfig.prefs(this).edit().putBoolean("enabled",false).putBoolean("minimized",false).commit();
+            stopService(new Intent(this,FloatingPanelService.class));SmartButtonsService.command(this,SmartButtonsService.STOP);
+            speech.cancel();stopAudio();importEpoch++;if(pendingFile!=null)pendingFile.delete();pendingFile=null;
+            deleteTemporary();finishAndRemoveTask();
+        });
+        return header;
+    }
+    private void settingsBack(LinearLayout header) {
+        TextView back=button("返回設定",false);back.setTextSize(TypedValue.COMPLEX_UNIT_PX,px(18));
+        LinearLayout.LayoutParams position=new LinearLayout.LayoutParams(px(132),px(48));position.rightMargin=px(16);
+        header.addView(back,0,position);
+        back.setOnClickListener(v->showSettings());
+    }
+    private TextView settingsRow(LinearLayout parent,String glyph,String title,String value,Runnable action) {
+        LinearLayout line=row();line.setPadding(px(18),0,px(14),0);clickable(line,SURFACE,0,0,false);
+        line.addView(icon(glyph,28,TEAL),new LinearLayout.LayoutParams(px(44),-1));
+        TextView label=text(title,21,WHITE,true);label.setPadding(px(12),0,0,0);
+        line.addView(label,new LinearLayout.LayoutParams(px(260),-1));
+        TextView summary=text(value,17,MUTED,false);summary.setMaxLines(2);summary.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        line.addView(summary,new LinearLayout.LayoutParams(0,-1,1));
+        line.addView(icon("\ue5cc",26,MUTED),new LinearLayout.LayoutParams(px(32),-1));
+        line.setContentDescription(title);line.setOnClickListener(v->action.run());parent.addView(line,new LinearLayout.LayoutParams(-1,px(64)));
+        View divider=new View(this);divider.setBackgroundColor(LINE);parent.addView(divider,new LinearLayout.LayoutParams(-1,px(1)));
+        return summary;
+    }
+    private LinearLayout settingsContent() {
+        ScrollView scroll=new ScrollView(this);scroll.setFillViewport(false);root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+        LinearLayout content=column();content.setPadding(px(24),px(12),px(24),px(12));scroll.addView(content);return content;
+    }
+    private void showSettings() {
+        page="settings";settingsSummaries.clear();settingsSignature="";settingsRefreshedAt=0;
+        mainHeader();addTabs(true);LinearLayout content=settingsContent();
+        settingsSummaries.add(settingsRow(content,"\ue029","傳聲方式","",this::selectSpeakingMode));
+        settingsSummaries.add(settingsRow(content,"\ue31d","Live 麥克風","",this::showLiveSettings));
+        settingsSummaries.add(settingsRow(content,"\ue050","音量及增益","",this::showAudioSettings));
+        settingsSummaries.add(settingsRow(content,"\ue913","懸浮面板","",()->{stopAudio();startActivity(new Intent(this,FloatingButtonsActivity.class));}));
+        settingsSummaries.add(settingsRow(content,"\ue1a7","靈動貼","",this::showSmartButtons));
+        settingsSummaries.add(settingsRow(content,"\ue8b8","測試及關於","",this::showChecks));
+        TextView note=text("畫面及懸浮按鈕共用傳聲方式；靈動貼單擊動作獨立設定。",16,MUTED,false);
+        note.setPadding(px(8),px(6),px(8),0);content.addView(note,new LinearLayout.LayoutParams(-1,px(44)));
+        updateSettings();FloatingPanelService.sync(this,false);
+    }
+    private void updateSettings() {
+        if(!"settings".equals(page)||settingsSummaries.size()!=6)return;
+        long now=android.os.SystemClock.elapsedRealtime();if(now-settingsRefreshedAt<500)return;settingsRefreshedAt=now;
+        String microphone;try{microphone=LiveAudioConfig.label(LiveAudioConfig.input(this),0);}catch(RuntimeException e){microphone="已存麥克風離線";}
+        SharedPreferences p=SpeakingOptions.prefs(this),floating=FloatingConfig.prefs(this);
+        String[] values={SpeakingOptions.MODES[SpeakingOptions.mode(this)],
+            LiveCaptureMode.label(LiveAudioConfig.mode(this))+" · "+microphone+" · +"+p.getInt("live_mic_db",0)+" dB",
+            "系統 "+audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)+"/"+audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)+" · 車外 +"+p.getInt("external_db",0)+" dB",
+            (floating.getBoolean("enabled",false)?"已啟用":"已關閉")+" · 按鈕 "+floating.getInt("size",88)+" px · 縮小 "+floating.getInt("minimized_size",88)+" px",
+            (SmartButtonStore.prefs(this).getBoolean("enabled",false)?"已啟用":"已關閉")+" · "+SmartButtonStore.devices(this).size()+" 個靈動貼 · 配對及單擊／雙擊設定",
+            "喇叭試音、音訊診斷、版本及授權"};
+        String signature=java.util.Arrays.toString(values);if(signature.equals(settingsSignature))return;settingsSignature=signature;
+        for(int i=0;i<values.length;i++)settingsSummaries.get(i).setText(values[i]);
+    }
+    private void showChecks() {
+        page="checks";LinearLayout header=mainHeader();settingsBack(header);addTabs(true);
+        LinearLayout content=settingsContent();content.addView(text("測試及關於",26,WHITE,true),new LinearLayout.LayoutParams(-1,px(52)));
+        settingsRow(content,"\ue050","喇叭試音","測試車外喇叭輸出",this::testSpeaker);
+        settingsRow(content,"\ue85c","音訊診斷","收音電平、音訊裝置及最近狀態",this::showDiagnostics);
+        settingsRow(content,"\ue88e","關於及授權","Outer Voice 版本、製作及開源聲明",this::showCredits);
+    }
+    private void testSpeaker() {
+        if(speech.busy()||live.isActive()||recorder.active()||player.active()){toast("請先停止目前音訊");return;}
+        try{playFile(WavTools.testTone(getCacheDir()),"test");}catch(Exception e){toast(e.getMessage());}
+    }
     private void showSmartButtons() {
-        stopService(new Intent(this, FloatingPanelService.class));
-        page = "buttons"; startPage("Outer Voice",false); addTabs(true);
+        FloatingPanelService.sync(this,false);
+        page = "buttons";LinearLayout header=mainHeader();settingsBack(header);addTabs(true);
         root.addView(new SmartButtonsPage(this),new LinearLayout.LayoutParams(-1,0,1));
     }
     private void selectSpeakingMode() {
         new AlertDialog.Builder(this).setTitle("畫面及懸浮按鈕收音模式")
             .setSingleChoiceItems(SpeakingOptions.MODES,SpeakingOptions.mode(this),(d,w)->{
                 speech.cancelIfOwned(this); SpeakingOptions.prefs(this).edit().putInt("screen_mode",w).apply();
-                FloatingPanelService.sync(this,true); d.dismiss(); showHome();
+                FloatingPanelService.sync(this,true); d.dismiss(); if("settings".equals(page))showSettings();else showHome();
             }).setNegativeButton("取消",null).show();
     }
     private void showHome() {
         HoldFeedback.stop(micButton); speechAnimating = false;
         page = "home"; rows.clear(); bars.clear(); lastHomeState = "";
-        LinearLayout header = startPage("Outer Voice", false);
-        TextView floating = icon("\ue913", 30, TEAL);
-        floating.setContentDescription("Floating Panel settings");
-        clickable(floating, Color.TRANSPARENT, 0, 8, false);
-        header.addView(floating, new LinearLayout.LayoutParams(px(48), px(48)));
-        floating.setOnClickListener(v -> { stopAudio(); startActivity(new Intent(this, FloatingButtonsActivity.class)); });
-        TextView audioSettings = icon("\ue050", 30, TEAL);
-        audioSettings.setContentDescription("Audio settings and diagnostics");
-        clickable(audioSettings, Color.TRANSPARENT, 0, 8, false);
-        header.addView(audioSettings, new LinearLayout.LayoutParams(px(48), px(48)));
-        audioSettings.setOnClickListener(v -> showAudioSettings());
-        routeStatus = text("Outer speaker", 18, MUTED, true);
-        header.addView(routeStatus, new LinearLayout.LayoutParams(px(170), px(48)));
-        TextView info = icon("\ue88e", 32, WHITE); info.setContentDescription("App information and credits");
-        clickable(info, Color.TRANSPARENT, 0, 8, false);
-        header.addView(info, new LinearLayout.LayoutParams(px(56), px(56)));
-        info.setOnClickListener(v -> { stopAudio(); showCredits(); });
-        TextView exit = icon("\ue8ac", 30, WHITE); exit.setContentDescription("Exit app");
-        clickable(exit, Color.TRANSPARENT, 0, 8, false); header.addView(exit, new LinearLayout.LayoutParams(px(48), px(48)));
-        exit.setOnClickListener(v -> {
-            FloatingConfig.prefs(this).edit().putBoolean("enabled", false).putBoolean("minimized", false).commit();
-            stopService(new Intent(this, FloatingPanelService.class));
-            SmartButtonsService.command(this,SmartButtonsService.STOP); speech.cancel(); stopAudio(); importEpoch++;
-            if (pendingFile != null) pendingFile.delete(); pendingFile = null;
-            deleteTemporary(); finishAndRemoveTask();
-        });
+        mainHeader();
         addTabs(false);
         LinearLayout body = row(); body.setGravity(Gravity.TOP);
         root.addView(body, new LinearLayout.LayoutParams(-1, 0, 1f));
         LinearLayout left = column(); left.setGravity(Gravity.CENTER_HORIZONTAL);
         left.setPadding(px(24), px(22), px(24), px(22));
         body.addView(left, new LinearLayout.LayoutParams(px(400), -1));
-        TextView speakingMode = text("收音模式  ▾", 22, TEAL, true);
-        clickable(speakingMode,SURFACE,LINE,10,false);
-        speakingMode.setPadding(px(12),0,px(12),0); speakingMode.setOnClickListener(v -> selectSpeakingMode());
-        speakingMode.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
-        left.addView(speakingMode, new LinearLayout.LayoutParams(-1, px(48)));
+        String[] modeNames={"按住說話","點按錄音","即時傳聲"};
+        TextView speakingMode = text("傳聲方式 · "+modeNames[SpeakingOptions.mode(this)],20,MUTED,false);
+        left.addView(speakingMode,new LinearLayout.LayoutParams(-1,px(48)));
         LinearLayout controls = column(); controls.setGravity(Gravity.CENTER);
         left.addView(controls, new LinearLayout.LayoutParams(-1, 0, 1f));
         micButton = icon("\ue029", 100, TEAL);
@@ -626,7 +678,8 @@ public class MainActivity extends Activity {
         } catch (Exception e) { return false; }
     }
     private void showCredits() {
-        page = "credits"; startPage("Credits", true);
+        page = "credits"; LinearLayout header=startPage("關於及授權", true);
+        header.getChildAt(0).setOnClickListener(v->showChecks());
         LinearLayout content = column(); content.setPadding(px(72), px(8), px(72), px(12));
         root.addView(content, new LinearLayout.LayoutParams(-1, 0, 1f));
         TextView title = text("Outer Voice", 72, WHITE, true); title.setGravity(Gravity.CENTER);
@@ -735,15 +788,42 @@ public class MainActivity extends Activity {
         });
         TextView note = text("0 至 +24 dB · 套用錄音、已儲存聲音及即時傳聲\n數碼放大，含過載限制；系統音量獨立調整。", 17, MUTED, false);
         panel.addView(note, new LinearLayout.LayoutParams(-1, px(60)));
-        LinearLayout actions = row();
-        TextView test = button("Test speaker", false), report = button("Diagnostics", false);
-        actions.addView(test, new LinearLayout.LayoutParams(0, px(54), 1f)); actions.addView(report, new LinearLayout.LayoutParams(0, px(54), 1f)); panel.addView(actions);
-        test.setOnClickListener(v -> {
-            if (live.isActive() || recorder.active() || player.active()) { toast("Stop current audio first"); return; }
-            try { playFile(WavTools.testTone(getCacheDir()), "test"); } catch (Exception e) { toast(e.getMessage()); }
-        });
-        report.setOnClickListener(v -> showDiagnostics());
         new AlertDialog.Builder(this).setTitle("Audio settings").setView(panel).setPositiveButton("Close", null).show();
+    }
+    private void showLiveSettings() {
+        LinearLayout content=column();content.setPadding(px(20),px(8),px(20),px(12));
+        TextView mode=button("收音模式 · "+LiveCaptureMode.label(LiveAudioConfig.mode(this)),false);
+        content.addView(mode,new LinearLayout.LayoutParams(-1,px(52)));
+        mode.setOnClickListener(v->{
+            String[] keys={"compat","performance","standard"};String[] labels={LiveCaptureMode.label(keys[0]),LiveCaptureMode.label(keys[1])+"（Android 10+）",LiveCaptureMode.label(keys[2])};
+            int selected=java.util.Arrays.asList(keys).indexOf(LiveAudioConfig.mode(this));
+            new AlertDialog.Builder(this).setTitle("Live 收音模式").setSingleChoiceItems(labels,selected,(d,w)->{
+                if(w==1&&android.os.Build.VERSION.SDK_INT<29){toast("低延遲傳聲需要 Android 10 或以上");return;}
+                SpeakingOptions.prefs(this).edit().putString("live_capture_mode",keys[w]).apply();mode.setText("收音模式 · "+LiveCaptureMode.label(keys[w]));d.dismiss();
+            }).setNegativeButton("取消",null).show();
+        });
+        String selectedMic;
+        try { selectedMic=LiveAudioConfig.label(LiveAudioConfig.input(this),0); } catch(RuntimeException e) { selectedMic="已存麥克風離線 · 請重新選擇"; }
+        space(content,8);TextView microphone=button("Live 麥克風 · "+selectedMic,false);
+        microphone.setTextSize(TypedValue.COMPLEX_UNIT_PX,px(17));microphone.setSingleLine(true);microphone.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        content.addView(microphone,new LinearLayout.LayoutParams(-1,px(52)));
+        microphone.setOnClickListener(v->{
+            java.util.List<android.media.AudioDeviceInfo> ports=LiveAudioConfig.inputs(this);String[] labels=new String[ports.size()+1];labels[0]="自動 · 系統選擇麥克風";
+            String key=SpeakingOptions.prefs(this).getString("live_input","");int selected=0;
+            for(int i=0;i<ports.size();i++){labels[i+1]=LiveAudioConfig.label(ports.get(i),i+1);if(LiveAudioConfig.info(ports.get(i)).key().equals(key))selected=i+1;}
+            new AlertDialog.Builder(this).setTitle("Live 麥克風 · 按 ID／輸入埠辨認").setSingleChoiceItems(labels,selected,(d,w)->{
+                LiveAudioConfig.select(this,w==0?"":LiveAudioConfig.info(ports.get(w-1)).key());microphone.setText(w==0?labels[0]:labels[w]);d.dismiss();
+            }).setNegativeButton("取消",null).show();
+        });
+        TextView gainLabel=text("Live 麥克風數碼增益：+"+SpeakingOptions.prefs(this).getInt("live_mic_db",0)+" dB",18,WHITE,true);content.addView(gainLabel);
+        android.widget.SeekBar slider=new android.widget.SeekBar(this);slider.setContentDescription("Live 麥克風數碼增益");slider.setMax(24);slider.setProgress(SpeakingOptions.prefs(this).getInt("live_mic_db",0));content.addView(slider,new LinearLayout.LayoutParams(-1,px(48)));
+        slider.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener(){public void onStartTrackingTouch(android.widget.SeekBar v){}public void onStopTrackingTouch(android.widget.SeekBar v){}public void onProgressChanged(android.widget.SeekBar v,int n,boolean user){if(user)SpeakingOptions.prefs(MainActivity.this).edit().putInt("live_mic_db",n).apply();gainLabel.setText("Live 麥克風數碼增益：+"+n+" dB");}});
+        content.addView(text("收音模式及麥克風選擇在下次開始時生效。\n無聲時請檢查麥克風選擇及輸入電平。",16,MUTED,false));
+        TextView details=text(LiveMicPassthrough.lastReport,15,MUTED,false);details.setTextIsSelectable(true);content.addView(details);
+        ScrollView scroll=new ScrollView(this);scroll.addView(content);
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Live 麥克風設定").setView(scroll).setPositiveButton("關閉",null).create();
+        Runnable refreshDetails=new Runnable(){public void run(){if(!dialog.isShowing())return;details.setText(LiveMicPassthrough.lastReport);main.postDelayed(this,1000);}};
+        dialog.setOnDismissListener(d->main.removeCallbacks(refreshDetails));dialog.show();main.post(refreshDetails);
     }
     private void showDiagnostics() {
         String report = AudioDiagnostics.report(this);
@@ -756,8 +836,8 @@ public class MainActivity extends Activity {
             }).show();
     }
     private void toast(String message) { Toast.makeText(this, message == null ? "Operation failed" : message, Toast.LENGTH_LONG).show(); }
-    @Override public void onBackPressed() { if (!"home".equals(page)) cancelAdd(); else { stopAudio(); super.onBackPressed(); } }
-    @Override protected void onResume() { super.onResume(); paused = false; main.removeCallbacks(refresh); main.post(refresh); if ("home".equals(page)) FloatingPanelService.sync(this, false); SmartButtonsService.resume(this); }
+    @Override public void onBackPressed() { if("buttons".equals(page)||"checks".equals(page)){showSettings();return;}if("credits".equals(page)){showChecks();return;}if("settings".equals(page)){showHome();return;}if (!"home".equals(page)) cancelAdd(); else { stopAudio(); super.onBackPressed(); } }
+    @Override protected void onResume() { super.onResume(); paused = false; main.removeCallbacks(refresh); main.post(refresh); if ("home".equals(page)||"buttons".equals(page)||"settings".equals(page)||"checks".equals(page)) FloatingPanelService.sync(this, false); settingsRefreshedAt=0; updateSettings(); SmartButtonsService.resume(this); }
     @Override protected void onPause() { paused = true; main.removeCallbacks(refresh); if (live != null) { stopAudio(); deleteTemporary(); if ("add".equals(page) && addRecord != null) { addRecord.setText("Record"); saveButton.setEnabled(!importing); saveButton.setAlpha(importing ? .4f : 1f); recordInfo.setText("Record up to 180 seconds"); } } super.onPause(); }
     @Override protected void onDestroy() { importEpoch++; if (live != null) stopAudio(); if (speech != null) speech.observers.remove(speechChanged); deleteTemporary(); main.removeCallbacksAndMessages(null); if (pendingFile != null) pendingFile.delete(); super.onDestroy(); }
 }

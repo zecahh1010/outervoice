@@ -182,7 +182,7 @@ public final class FloatingPanelService extends Service {
     }
     private void buildBubble() {
         int d=config.minimizedSize;boolean speak=config.liveOnly();
-        SoundIcon bubble=new SoundIcon(this,icons,0,true,Math.round(d*.45f),config.live().foreground());bubble.setBackground(shape(config.live().buttonColor(),true));bubble.setContentDescription(speak?"Hold Live Speak directly; release to play; drag to move":"Reopen floating panel; drag to move");bubble.setClickable(true);bubble.setFocusable(true);panel=bubble;if(speak)mic=bubble;
+        SoundIcon bubble=new SoundIcon(this,icons,0,true,Math.round(d*.45f),config.live().foreground());bubble.setBackground(shape(config.live().buttonColor(),true));bubble.setContentDescription(speak?"Hold Live Speak directly; release to play; drag to move":"Reopen floating panel; drag to move");bubble.setClickable(true);bubble.setFocusable(true);panel=bubble;mic=bubble;
         params=new WindowManager.LayoutParams(d,d,WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,PixelFormat.TRANSLUCENT);params.gravity=Gravity.TOP|Gravity.LEFT;params.alpha=.8f;
         params.x=FloatingConfig.prefs(this).getInt("bubble_x",FloatingConfig.prefs(this).getInt("x",24));params.y=FloatingConfig.prefs(this).getInt("bubble_y",FloatingConfig.prefs(this).getInt("y",24));clamp();windows.addView(panel,params);
         if(!speak)bubble.setOnClickListener(v->transitionPanel(false));
@@ -248,7 +248,7 @@ public final class FloatingPanelService extends Service {
     }
     private void show(String message) {
         if (status != null) status.setText(message == null ? "Audio failed" : message);
-        else if (message != null && !message.startsWith("Recording") && !message.startsWith("Saving") && !message.startsWith("Playing") && !message.startsWith("Hold")) Toast.makeText(this,message,Toast.LENGTH_LONG).show();
+        // Routine session/meter updates never create Toasts; errors remain in diagnostics.
     }
     private void closePanel() {
         FloatingConfig.prefs(this).edit().putBoolean("enabled", false).putBoolean("minimized", false).apply(); stopSelf();
