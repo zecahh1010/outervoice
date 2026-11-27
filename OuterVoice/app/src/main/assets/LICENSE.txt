@@ -1,7 +1,7 @@
-Outer Voice 1.6.0 combined release: GPL-3.0-only with upstream section 7 terms.
+Outer Voice 1.6.1 combined release: GPL-3.0-only with upstream section 7 terms.
 Based on Zeekr Shortcut by dts88 (https://github.com/dts88/zeekr-shortcut-car)
 Modified version for Outer Voice; not the original Zeekr Shortcut.
-Source accompanies the APK as OuterVoice-1.6.0-source.zip.
+Source accompanies the APK as OuterVoice-1.6.1-source.zip.
 
 Original Outer Voice notices:
 MIT License

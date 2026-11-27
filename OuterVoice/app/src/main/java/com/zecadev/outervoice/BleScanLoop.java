@@ -5,24 +5,30 @@ import java.util.ArrayDeque;
 /** Serialized scan recovery; clock/radio ports allow deterministic sleep and failure tests. */
 final class BleScanLoop {
     interface Host { long now(); void later(Runnable r,long ms); void status(String text); }
-    interface Radio { boolean enabled(); void stop(); void repair(); int start(); }
+    interface Radio { boolean enabled(); void stop(); void repair(); int start(); default String unavailable(){return "藍牙未就緒 · 等待系統藍牙服務";} }
     private final Host host; private final Radio radio;
     private final ArrayDeque<Long> starts=new ArrayDeque<>();
     private int generation, failures; private long settledAt, retryAt;
-    private boolean wanted, paused, pending;
+    private boolean wanted, paused, pending, binding;
     volatile boolean scanning;
     BleScanLoop(Host h,Radio r){host=h;radio=r;}
     void wanted(boolean on){wanted=on;if(!on)stop();else ensure();}
     void pause(boolean on){paused=on;if(on)stop();else ensure();}
     void recover(long settle){stop();settledAt=host.now()+settle;retryAt=0;ensure();}
+    void binding(boolean on){
+        binding=on;
+        if(on){wanted=true;paused=false;retryAt=0;if(!scanning){generation++;pending=false;}}
+        ensure();
+    }
     void stop(){generation++;pending=false;scanning=false;radio.stop();}
     private void schedule(long delay){if(pending)return;pending=true;int token=generation;host.later(()->{if(token!=generation)return;pending=false;ensure();},Math.max(0,delay));}
     private void ensure(){
         if(!wanted||paused||pending||scanning)return;
         long now=host.now();while(!starts.isEmpty()&&now-starts.peekFirst()>=30_000)starts.removeFirst();
-        long at=Math.max(settledAt,retryAt);if(starts.size()>=3)at=Math.max(at,starts.peekFirst()+30_050);
+        long at=Math.max(binding?0:settledAt,retryAt);if(starts.size()>=3)at=Math.max(at,starts.peekFirst()+30_050);
         if(now<at){host.status("BLE 正在恢復 · "+Math.max(1,(at-now+999)/1000)+" 秒後重試");schedule(at-now);return;}
-        if(!radio.enabled()){host.status("藍牙未就緒 · 等待系統藍牙服務");schedule(5_000);return;}
+        if(!radio.enabled()){host.status(radio.unavailable());schedule(5_000);return;}
+        host.status("正在準備 BLE 掃描 · 清理上次登記");
         // Always stop the stable PendingIntent, even after registration failure or process restart.
         radio.stop();radio.repair();pending=true;int token=generation;
         host.later(()->{

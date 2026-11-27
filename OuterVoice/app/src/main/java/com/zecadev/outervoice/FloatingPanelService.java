@@ -238,10 +238,11 @@ public final class FloatingPanelService extends Service {
     private void updateSpeech() {
         if (destroyed) return;
         boolean recording = speech.recording();
+        boolean live = speech.live(), active = recording || live;
         if (mic != null) {
-            mic.setBackground(shape(recording ? 0xffef5350 : config.live().buttonColor(),true));
-            mic.setContentDescription(recording ? "Recording; tap to stop and play" : SpeakingOptions.hint(this));
-            if (speechAnimating != recording) { speechAnimating = recording; if (recording) HoldFeedback.start(mic); else HoldFeedback.stop(mic); }
+            mic.setBackground(shape(active ? 0xffef5350 : config.live().buttonColor(),true));
+            mic.setContentDescription(recording ? "Recording; tap to stop and play" : live ? "Live Speak active; tap to stop" : SpeakingOptions.hint(this));
+            if (speechAnimating != active) { speechAnimating = active; if (active) HoldFeedback.start(mic); else HoldFeedback.stop(mic); }
         }
         show(recording ? "Recording " + speech.milliseconds / 1000 + "s / 180s" : speech.message.isEmpty() ? SpeakingOptions.hint(this) : speech.message);
         armAutoMinimize();

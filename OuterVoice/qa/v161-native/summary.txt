@@ -1,0 +1,14 @@
+Outer Voice 1.6.1 (build 15), Android 13/API 33, 1024x600 emulator
+
+PASS 17 discovery assertions: actual Android BLE PendingIntent registration with location OFF and microphone denied; injected advertisement delivery through the production PendingIntent/receiver, worker-thread GATT initiation, no premature binding, Cancel, parked pairing and visible failures.
+PASS 10 Live Speak overlay assertions: native red pulse across rendered frames in both sizes; Stop from another controller's session clears animation and restores scale. Live session state is injected because the emulator has no BUS12.
+PASS 22 existing VoiceProbe assertions: independent actions, recording/pause, sound selection, rename and gains.
+PASS 24 existing SettingsProbe assertions: configuration navigation, assignments and overlay/remote-recording lifetime.
+PASS 19 existing FixProbe assertions: minimized recording pulse, no repeated Toasts, injected BLE error2 cleanup, park/wake registration, actual Android PCM capture/write/release in all three modes using an explicit test-only emulator output, microphone selection.
+PASS normal JVM WAV/PCM/protocol/gain/recovery suites plus PairingDiscoveryTest.
+PASS retained APK certificate and zip alignment. Certificate SHA256: 664b72c9d4c6075814ffa1c9b72a2d0c78132238fbed9d6b2265b78a7614a17e
+
+The existing native suites ran before the final pairing-status layout/preparation-message polish. The final signed APK repeats all 17 discovery and 10 Live animation/layout assertions; BLE/audio logic is unchanged. The discovery harness now waits for asynchronous PendingIntent delivery instead of assuming a fixed 450ms completion time.
+
+BOUNDARY: no physical BLE peripheral, real CCCD response, Zeekr/VLite sleep recovery or exterior BUS12 audio is validated here. Synthetic advertisements are not over-the-air pairing evidence. Native tests restore preferences and stop their services.
+Native pairing/diagnostics screenshots were also visually checked. A separate emulator System UI boot ANR dialog was dismissed before recapturing the unobscured page; no Outer Voice crash was recorded in AndroidRuntime logs.

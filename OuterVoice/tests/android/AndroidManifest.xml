@@ -4,4 +4,5 @@
     <instrumentation android:name=".VoiceProbe" android:targetPackage="com.zecadev.outervoice" />
     <instrumentation android:name=".FixProbe" android:targetPackage="com.zecadev.outervoice" />
     <instrumentation android:name=".SettingsProbe" android:targetPackage="com.zecadev.outervoice" />
+    <instrumentation android:name=".PairingProbe" android:targetPackage="com.zecadev.outervoice" />
 </manifest>

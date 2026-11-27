@@ -1,6 +1,6 @@
 # Outer Voice
 
-Native Android app for a 1024 × 600 head unit. Version 1.6.0 (build 14), package `com.zecadev.outervoice`, Android 9/API 28 or later. Signed with the existing update certificate.
+Native Android app for a 1024 × 600 head unit. Version 1.6.1 (build 15), package `com.zecadev.outervoice`, Android 9/API 28 or later. Signed with the existing update certificate.
 
 See [1.5.1 car-test fixes](release-notes-v1.5.1.md) for independent 靈動貼 actions, BLE pairing and 0..+24 dB exterior digital gain. See [validation](validation-v1.5.1.md) for emulator evidence and car-only checks.
 
@@ -8,13 +8,15 @@ Version 1.5.1 keeps the overlay on the 靈動貼 tab, repairs BLE sleep/wake reg
 
 Version 1.5.2 uses speaking labels: 原始／相容, 低延遲傳聲 and 標準麥克風. This is an external-speaking app; MiclessKaraoke is a technical capture/routing reference, not a karaoke feature. See [1.5.2 notes](release-notes-v1.5.2.md).
 
+Version 1.6.1 fixes Android 12+ BLE discovery permissions, serializes scan/GATT delivery, exposes pairing diagnostics and animates floating Live Speak in both layouts. See [1.6.1 notes](release-notes-v1.6.1.md) and [native validation](validation-v1.6.1.md). Android 13 pairing requires Nearby Devices permissions; microphone permission is needed for speaking, not discovery.
+
 ## Settings navigation
 
 Open **設定** for **傳聲方式**, **Live 麥克風**, **音量及增益**, **懸浮面板**, **靈動貼** or **測試及關於**. The list displays current settings and the smart-button page has a return-to-Settings control. The top-level speaking page keeps speaking and saved-sound operations. Its mode label is read-only; screen/floating mode changes remain independent of button assignments. See [1.6.0 notes](release-notes-v1.6.0.md) and [native validation](validation-v1.6.0.md).
 
 ## Operation
 
-- Speaking mode: choose hold/release/play (default), tap/record/tap/stop/play, or Live Speak (tap to start/stop realtime microphone output). Screen and floating controls use this choice. Record mode shows a red microphone with motion. Physical smart button actions have independent settings; neither selection forces the other to change. All audio uses BUS12_OUTER_NOTIFY.
+- Speaking mode: choose hold/release/play (default), tap/record/tap/stop/play, or Live Speak (tap to start/stop realtime microphone output). Screen and floating controls use this choice. Recording and Live Speak show a red floating microphone with motion. Physical smart button actions have independent settings; neither selection forces the other to change. All audio uses BUS12_OUTER_NOTIFY.
 - Recording selects a microphone format supported by Android, trying the device default and available sample rates, stereo/mono and float/PCM16 capture. The captured sample rate and channel count are retained; float samples are converted to PCM16 WAV storage for the existing player. There is no fixed 44.1 kHz mono capture requirement. The 180-second maximum remains. Temporary Activity-owned recordings are discarded when leaving the app and are not added to Saved sounds. Background overlay and remote sessions have separate foreground-service lifetimes.
 - Cancelled gestures, navigation/backgrounding discard Activity-owned recordings. Overlay and smart-button recording continue under their foreground services when the Activity is backgrounded. Audio focus loss cancels the shared session. Toggle recording and Live Speak can be stopped from a visible microphone control regardless of which control started them.
 - Add Sound: use Import Sound to select WAV, MP3 or other audio, or record the microphone. Successful imports enable Play/Stop to test the outer speaker before Add Sound saves the clip. Import examines file contents rather than enforcing an extension list. Import Sound directly opens Outer Voice's built-in storage browser using the v1.2.2 folder-navigation approach. Grant file access if prompted, choose Internal storage or an accessible mounted storage location, then browse folders and select a file. The browser lists every non-hidden file without an extension restriction and imports based on its contents. It does not depend on an installed Android document picker or file manager. PCM8/16/24/32 and float32/64 WAVs are converted directly; other formats use the Android device's decoders. Unreadable audio is reported. There is no fixed 20 MB input limit; free storage and the WAV container capacity still apply. Imports are streamed into 44.1 kHz mono PCM16 WAVs for the existing BUS12 player. Codec priming/padding is retained rather than applying untrusted gapless trim metadata. Saved sounds persist across restarts.
@@ -54,7 +56,9 @@ Run the pure Java WAV, smart-button protocol and digital-gain tests:
 powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -TestOnly
 ```
 
-Build output: `dist/OuterVoice-1.6.0.apk`. The script verifies its signature and alignment and writes `dist/SHA256.txt`. Build on the normal Windows host if a restricted sandbox blocks Java SDK access.
+Build output: `dist/OuterVoice-1.6.1.apk`. The script verifies its signature and alignment and writes `dist/SHA256.txt`. Build on the normal Windows host if a restricted sandbox blocks Java SDK access.
+
+Run `./package-source.ps1` after building to package corresponding sources/tests and update the APK/source hashes.
 
 The APK is signed with a locally generated Zeca/Outer Voice key, stored outside the app source in `.build-tools/outervoice-signing.jks`, with its password in `.build-tools/outervoice-signing-password.txt`. Preserve both privately for signed updates; neither is included in the APK, source archive or Git repository.
 

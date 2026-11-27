@@ -1,0 +1,18 @@
+PASS location switch is OFF for this Android 13 discovery test
+PASS BLE pairing does not require microphone permission
+PASS foreground discovery starts with Nearby Devices permissions only
+PASS real Android PendingIntent scan registration succeeds with location OFF
+PASS reopening pairing preserves the healthy scanner registration
+PASS unrelated advertisements cannot start GATT pairing
+PASS mutable PendingIntent delivers named short-press advertisement through the manifest receiver
+PASS short press is detected and requests long press without binding
+PASS receiver uses application state despite a different wrapper preference namespace
+PASS long-press advertisement starts the production GATT connection path
+PASS GATT and scan operations share the same serialized BLE handler
+PASS discovery alone never saves a binding before notification subscription
+PASS repeated long-press packets do not create duplicate GATT links
+PASS scanner failure remains visible during pairing
+PASS late advertisements after Cancel cannot restart pairing
+PASS explicit Pair exits parked service state
+PASS pairing UI retains scanner readiness/retry status
+BOUNDARY: actual Android registration and PendingIntent delivery; synthetic scan packets, no physical BLE peripheral/CCCD response.

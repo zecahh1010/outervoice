@@ -1,2 +1,2 @@
-34c198c725fd7cb076214cc780494ed65a8423bfd0f99fc187172699e1c40e21  OuterVoice-1.6.0.apk
-8874daa7a35fa0b930ff693d60b38714db66274729997201bb9209d2c36fdb70  OuterVoice-1.6.0-source.zip
+7b2e4d42fdcc82d5fb3916b4a7c78a7a8ec8df07c31ecf95dc65a9dfa88e2acb  OuterVoice-1.6.1.apk
+2edb97da7ec19b6de3da894a754e97d05a02f5f0f48b8ff74ac03c1f6d71e298  OuterVoice-1.6.1-source.zip

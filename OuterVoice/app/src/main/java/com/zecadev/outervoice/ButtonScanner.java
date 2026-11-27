@@ -21,6 +21,8 @@ final class ButtonScanner implements AutoCloseable {
     private final Handler work; private final BleScanLoop loop;
     private final PendingIntent intent;private BluetoothLeScanner scanner;private BluetoothAdapter adapter;
     private volatile boolean closed;private boolean sleeping,linkPaused,wasOn;private int phone=-1;private boolean discovery;
+    volatile String readiness="準備 BLE 掃描";
+    volatile long packets,buttonsHeard;
     private static PendingIntent token(Context c){return PendingIntent.getBroadcast(c,471,new Intent(c,ButtonScanReceiver.class).setAction(ButtonScanReceiver.ACTION),PendingIntent.FLAG_UPDATE_CURRENT|(Build.VERSION.SDK_INT>=31?PendingIntent.FLAG_MUTABLE:0));}
     static void stopOrphan(Context c){try{BluetoothManager m=(BluetoothManager)c.getSystemService(Context.BLUETOOTH_SERVICE);BluetoothAdapter a=m==null?null:m.getAdapter();BluetoothLeScanner s=a==null?null:a.getBluetoothLeScanner();if(s!=null)s.stopScan(token(c));}catch(RuntimeException ignored){}}
     ButtonScanner(Context c,Listener l){
@@ -28,17 +30,22 @@ final class ButtonScanner implements AutoCloseable {
         loop=new BleScanLoop(new BleScanLoop.Host(){
             public long now(){return SystemClock.elapsedRealtime();}
             public void later(Runnable r,long ms){work.postDelayed(r,ms);}
-            public void status(String s){main.post(()->{if(!closed)listener.status(s);});}
+            public void status(String s){readiness=s;AudioDiagnostics.log(s);if(!closed)listener.status(s);}
         },new BleScanLoop.Radio(){
             public boolean enabled(){try{
                 BluetoothManager m=(BluetoothManager)app.getSystemService(Context.BLUETOOTH_SERVICE);adapter=m==null?null:m.getAdapter();
                 boolean on=adapter!=null&&adapter.isEnabled();
-                if(wasOn&&!on)main.post(()->{if(!closed)listener.radioOff();});wasOn=on;
-                if(!on||!SmartButtonsService.permitted(app))return false;
-                android.location.LocationManager loc=(android.location.LocationManager)app.getSystemService(Context.LOCATION_SERVICE);
-                return loc==null||loc.isLocationEnabled();
-            }catch(RuntimeException e){return false;}}
+                if(wasOn&&!on&&!closed)listener.radioOff();wasOn=on;
+                if(!on){readiness="藍牙未開啟 · 請到系統藍牙設定開啟";return false;}
+                if(!SmartButtonsService.permitted(app)){readiness="未允許藍牙掃描／連接權限 · 請開啟權限";return false;}
+                if(SmartButtonPermissions.locationSwitchRequired(Build.VERSION.SDK_INT)){
+                    android.location.LocationManager loc=(android.location.LocationManager)app.getSystemService(Context.LOCATION_SERVICE);
+                    if(loc!=null&&!loc.isLocationEnabled()){readiness="此 Android 版本需要位置服務 · 請開啟位置服務";return false;}
+                }
+                return true;
+            }catch(RuntimeException e){readiness="藍牙服務未就緒："+e.getMessage();return false;}}
             public void stop(){try{if(scanner!=null)scanner.stopScan(intent);stopOrphan(app);}catch(RuntimeException ignored){}scanner=null;}
+            public String unavailable(){return readiness;}
             public void repair(){if(adapter!=null){StaleGatt.Result r=StaleGatt.replaceIfDead(adapter);if(!"alive".equals(r.text))AudioDiagnostics.log("BLE GATT recovery: "+r.text);}}
             public int start(){try{
                 scanner=adapter.getBluetoothLeScanner();if(scanner==null)return 3;
@@ -49,19 +56,23 @@ final class ButtonScanner implements AutoCloseable {
         });
         current=this;work.post(watchDiscovery);
     }
-    void wanted(boolean on){work.post(()->{if(!closed)loop.wanted(on);});}
-    void pauseLink(boolean on){work.post(()->{linkPaused=on;loop.pause(on||sleeping);});}
-    void park(){work.post(()->{sleeping=true;loop.pause(true);});}
-    void wake(){work.post(()->{sleeping=false;loop.recover(10_000);loop.pause(linkPaused);});}
-    void recover(){work.post(()->loop.recover(500));}
+    void execute(Runnable r){if(closed)return;if(Looper.myLooper()==work.getLooper())r.run();else work.post(()->{if(!closed)r.run();});}
+    Handler handler(){return work;}
+    void wanted(boolean on){execute(()->loop.wanted(on));}
+    void pauseLink(boolean on){execute(()->{linkPaused=on;loop.pause(on||sleeping);});}
+    void park(){execute(()->{sleeping=true;loop.pause(true);});}
+    void wake(){execute(()->{sleeping=false;loop.recover(10_000);loop.pause(linkPaused);});}
+    void recover(){execute(()->loop.recover(500));}
+    void binding(boolean on){execute(()->{if(on){sleeping=false;linkPaused=false;}loop.binding(on);});}
     boolean running(){return loop.scanning;}
     void receive(Intent value){
-        final Intent copy=new Intent(value);work.post(()->{
+        final Intent copy=new Intent(value);execute(()->{
             if(closed)return;
+            if(!SmartButtonStore.prefs(app).getBoolean("enabled",false)||!SmartButtonStore.prefs(app).getBoolean("listening_session",false)){loop.wanted(false);return;}
             int error=copy.getIntExtra(BluetoothLeScanner.EXTRA_ERROR_CODE,0);
             if(error!=0){loop.failed(error);return;}
-            ArrayList<ScanResult> results=copy.getParcelableArrayListExtra(BluetoothLeScanner.EXTRA_LIST_SCAN_RESULT);
-            if(results!=null)main.post(()->{if(!closed)for(ScanResult r:results)listener.result(r);});
+            ArrayList<ScanResult> results=Build.VERSION.SDK_INT>=33?copy.getParcelableArrayListExtra(BluetoothLeScanner.EXTRA_LIST_SCAN_RESULT,ScanResult.class):copy.getParcelableArrayListExtra(BluetoothLeScanner.EXTRA_LIST_SCAN_RESULT);
+            if(results!=null)for(ScanResult r:results){packets++;listener.result(r);}
         });
     }
     private final Runnable watchDiscovery=new Runnable(){public void run(){
@@ -72,5 +83,6 @@ final class ButtonScanner implements AutoCloseable {
         }}catch(RuntimeException ignored){}
         work.postDelayed(this,2_000);
     }};
-    @Override public void close(){closed=true;if(current==this)current=null;main.removeCallbacksAndMessages(null);work.post(()->{loop.wanted(false);work.removeCallbacksAndMessages(null);thread.quitSafely();});}
+    void close(Runnable cleanup){closed=true;if(current==this)current=null;main.removeCallbacksAndMessages(null);work.post(()->{cleanup.run();loop.wanted(false);work.removeCallbacksAndMessages(null);thread.quitSafely();});}
+    @Override public void close(){close(()->{});}
 }

@@ -1,0 +1,11 @@
+PASS expanded Live Speak button is red
+PASS expanded Live Speak button visibly pulses between native frames
+PASS expanded has an explicit live Stop description
+PASS floating Stop ends a Live session owned by another controller
+PASS stopping Live clears pulse and restores button scale
+PASS minimized Live Speak button is red
+PASS minimized Live Speak button visibly pulses between native frames
+PASS minimized has an explicit live Stop description
+PASS floating Stop ends a Live session owned by another controller
+PASS stopping Live clears pulse and restores button scale
+BOUNDARY: native overlay windows and rendered animation with injected live session state; emulator has no exterior BUS12, so this does not validate live car audio.

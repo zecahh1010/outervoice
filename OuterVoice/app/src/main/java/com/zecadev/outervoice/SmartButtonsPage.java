@@ -39,13 +39,13 @@ final class SmartButtonsPage extends LinearLayout {
         });
         space(left,10); pair = button("＋ 配對靈動貼"); left.addView(pair,new LayoutParams(-1,px(52)));
         pair.setOnClickListener(v -> { if (SmartButtonsService.pairing) SmartButtonsService.command(a,SmartButtonsService.CANCEL_PAIR); else activate(SmartButtonsService.PAIR); refresh(); });
-        space(left,12); state = label("",17,TEAL,false); left.addView(state,new LayoutParams(-1,px(75)));
+        space(left,12); state = label("",17,TEAL,false); left.addView(state,new LayoutParams(-1,px(92)));
         audioState = label("",16,MUTED,false); left.addView(audioState,new LayoutParams(-1,px(50)));
         LinearLayout system = new LinearLayout(a);
-        TextView bt=button("系統藍牙"),location=button("位置服務"),permissions=button("權限");
+        TextView bt=button("系統藍牙"),location=button(Build.VERSION.SDK_INT>=31?"配對診斷":"位置服務"),permissions=button("權限");
         for (TextView b : new TextView[]{bt,location,permissions}) { b.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX,px(16)); system.addView(b,new LayoutParams(0,px(48),1)); }
         left.addView(system);
-        bt.setOnClickListener(v->open(Settings.ACTION_BLUETOOTH_SETTINGS)); location.setOnClickListener(v->open(Settings.ACTION_LOCATION_SOURCE_SETTINGS));
+        bt.setOnClickListener(v->open(Settings.ACTION_BLUETOOTH_SETTINGS)); location.setOnClickListener(v->{if(Build.VERSION.SDK_INT>=31){TextView details=label(SmartButtonsService.diagnostics(),15,WHITE,false);details.setTextIsSelectable(true);details.setPadding(px(16),px(8),px(16),px(8));ScrollView scroll=new ScrollView(activity);scroll.addView(details);new AlertDialog.Builder(activity).setTitle("靈動貼配對診斷").setView(scroll).setPositiveButton("關閉",null).show();}else open(Settings.ACTION_LOCATION_SOURCE_SETTINGS);});
         permissions.setOnClickListener(v->{ try { a.startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,android.net.Uri.parse("package:"+a.getPackageName()))); } catch (RuntimeException e) { toast("無法開啟權限設定"); } });
         ScrollView scroll = new ScrollView(a); scroll.setFillViewport(true); addView(scroll,new LayoutParams(0,-1,1));
         devices=col(); scroll.addView(devices); refresh();
@@ -59,8 +59,7 @@ final class SmartButtonsPage extends LinearLayout {
     private void open(String action){try{activity.startActivity(new Intent(action));}catch(RuntimeException e){toast("此車機未提供這個系統設定頁");}}
     private void activate(String action){
         ArrayList<String> missing=new ArrayList<>();
-        for(String p:new String[]{Manifest.permission.RECORD_AUDIO,Manifest.permission.ACCESS_FINE_LOCATION})if(activity.checkSelfPermission(p)!=PackageManager.PERMISSION_GRANTED)missing.add(p);
-        if(Build.VERSION.SDK_INT>=31)for(String p:new String[]{"android.permission.BLUETOOTH_SCAN","android.permission.BLUETOOTH_CONNECT"})if(activity.checkSelfPermission(p)!=PackageManager.PERMISSION_GRANTED)missing.add(p);
+        for(String p:SmartButtonPermissions.required(Build.VERSION.SDK_INT))if(activity.checkSelfPermission(p)!=PackageManager.PERMISSION_GRANTED)missing.add(p);
         if(!missing.isEmpty()){activity.requestPermissions(missing.toArray(new String[0]),77);toast("允許權限後，請再按啟用或配對");return;}
         SmartButtonStore.prefs(activity).edit().putBoolean("enabled",true).apply();SmartButtonsService.command(activity,action);
     }
@@ -68,7 +67,7 @@ final class SmartButtonsPage extends LinearLayout {
         boolean on=SmartButtonStore.prefs(activity).getBoolean("enabled",false);
         enable.setText(on?"已啟用 · 點按停止接收":"啟用靈動貼");enable.setTextColor(on?TEAL:WHITE);
         pair.setText(SmartButtonsService.pairing?"取消配對":"＋ 配對靈動貼");
-        state.setText(SmartButtonsService.status);audioState.setText(VoiceSession.get(activity).message);
+        state.setText(SmartButtonsService.status);audioState.setText(SmartButtonsService.pairing?"廣播 "+SmartButtonsService.packets+" · 靈動貼 "+SmartButtonsService.buttonPackets+" · 長按 "+SmartButtonsService.longPresses:VoiceSession.get(activity).message);
         StringBuilder key=new StringBuilder(SmartButtonStore.devices(activity).toString());
         for(String a:SmartButtonStore.devices(activity))key.append(SmartButtonStore.prefs(activity).getAll().toString()).append(SmartButtonsService.connections.get(a));
         key.append(activity.getSharedPreferences("sounds",0).getString("items","[]"));
