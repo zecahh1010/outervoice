@@ -1,6 +1,6 @@
 # Outer Voice
 
-Native Android app for a 1024 × 600 head unit. Version 1.6.1 (build 15), package `com.zecadev.outervoice`, Android 9/API 28 or later. Signed with the existing update certificate.
+Native Android app for a 1024 × 600 head unit. Version 1.6.2 (build 16), package `com.zecadev.outervoice`, Android 9/API 28 or later. Signed with the existing update certificate.
 
 See [1.5.1 car-test fixes](release-notes-v1.5.1.md) for independent 靈動貼 actions, BLE pairing and 0..+24 dB exterior digital gain. See [validation](validation-v1.5.1.md) for emulator evidence and car-only checks.
 
@@ -8,7 +8,7 @@ Version 1.5.1 keeps the overlay on the 靈動貼 tab, repairs BLE sleep/wake reg
 
 Version 1.5.2 uses speaking labels: 原始／相容, 低延遲傳聲 and 標準麥克風. This is an external-speaking app; MiclessKaraoke is a technical capture/routing reference, not a karaoke feature. See [1.5.2 notes](release-notes-v1.5.2.md).
 
-Version 1.6.1 fixes Android 12+ BLE discovery permissions, serializes scan/GATT delivery, exposes pairing diagnostics and animates floating Live Speak in both layouts. See [1.6.1 notes](release-notes-v1.6.1.md) and [native validation](validation-v1.6.1.md). Android 13 pairing requires Nearby Devices permissions; microphone permission is needed for speaking, not discovery.
+Version 1.6.2 restores the 1.5.0 direct callback scan/main-looper pairing path after real-car discovery failures in 1.6.1. Allow location and Bluetooth permissions, enable location services, then long-press the button while pairing. Later recovery, diagnostics and Live animation remain. See [1.6.2 notes](release-notes-v1.6.2.md) and [validation](validation-v1.6.2.md).
 
 ## Settings navigation
 
@@ -56,7 +56,7 @@ Run the pure Java WAV, smart-button protocol and digital-gain tests:
 powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -TestOnly
 ```
 
-Build output: `dist/OuterVoice-1.6.1.apk`. The script verifies its signature and alignment and writes `dist/SHA256.txt`. Build on the normal Windows host if a restricted sandbox blocks Java SDK access.
+Build output: `dist/OuterVoice-1.6.2.apk`. The script verifies its signature and alignment and writes `dist/SHA256.txt`. Build on the normal Windows host if a restricted sandbox blocks Java SDK access.
 
 Run `./package-source.ps1` after building to package corresponding sources/tests and update the APK/source hashes.
 

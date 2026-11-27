@@ -11,12 +11,8 @@ public final class ButtonScanReceiver extends BroadcastReceiver {
     static final String ACTION="com.zecadev.outervoice.SMART_BUTTON_SCAN";
     @Override public void onReceive(Context c,Intent i){
         if(i==null||!ACTION.equals(i.getAction()))return;
-        // Resolve the application context before consulting any virtualized app state.
-        // Zeekr Shortcut likewise installs/delivers through its application, not receiver prefs.
-        Context app=c.getApplicationContext();
-        ButtonScanner scanner=ButtonScanner.current;
-        if(scanner!=null){scanner.receive(i);return;}
-        try{app.startForegroundService(new Intent(app,SmartButtonsService.class).setAction("scan_result").putExtra("scan_result",i));}
-        catch(RuntimeException e){ButtonScanner.stopOrphan(app);AudioDiagnostics.log("BLE wake delivery: "+e.getMessage());}
+        // Migration cleanup only: v1.5.0-style callbacks now deliver scan results directly.
+        // A queued broadcast from an older APK cannot restart or feed the new listener.
+        ButtonScanner.stopOrphan(c.getApplicationContext());
     }
 }

@@ -1,0 +1,13 @@
+Outer Voice 1.6.2 (build 16), Android 13/API 33, 1024x600 emulator
+
+PASS pairing-report.txt: 20 assertions
+PASS animation-report.txt: 10 assertions
+PASS VoiceProbe.txt: 22 assertions
+PASS SettingsProbe.txt: 24 assertions
+PASS FixProbe.txt: 19 assertions
+PASS JVM WAV/import/protocol/gain, recovery and restored permission policy suites.
+PASS ButtonLink.java matches 1.5.0 commit 01ca59e.
+PASS retained APK signing certificate and alignment.
+Native callback scan requests, main-looper execution and injected callbacks were checked. Location permission/services are enabled for compatibility discovery, with microphone denied during discovery tests. The location-disabled warning was visually checked in pairing-page.png. Legacy PendingIntent broadcasts cannot feed the new scanner; old callback generations are rejected after stop.
+
+BOUNDARY: synthetic ScanCallback packets do not prove actual over-the-air delivery, physical GATT/CCCD pairing or Zeekr/VLite sleep behavior. Live animation uses injected session state, and the PCM probe uses a test-only emulator speaker. The signed release keeps strict BUS12 routing. Real-car retesting remains required.

@@ -1,0 +1,21 @@
+PASS location is ON as required by v1.5.0 target-28 compatibility
+PASS v1.5.0 fine location permission is granted
+PASS BLE pairing does not require microphone permission
+PASS foreground callback discovery starts with v1.5.0 permission set
+PASS Android ScanCallback request starts with the v1.5.0 overload
+PASS scan registration, delivery and GATT use the v1.5.0 main looper
+PASS reopening pairing preserves the healthy scanner registration
+PASS unrelated advertisements cannot start GATT pairing
+PASS registered ScanCallback delivers a named short-press advertisement
+PASS short press is detected and requests long press without binding
+PASS batched callback results follow the same discovery path
+PASS old PendingIntent broadcasts cannot feed or replace callback discovery
+PASS long-press advertisement starts the production GATT connection path
+PASS GATT and scan operations share the same serialized BLE handler
+PASS discovery alone never saves a binding before notification subscription
+PASS repeated long-press packets do not create duplicate GATT links
+PASS scanner failure remains visible during pairing
+PASS late callbacks after stop/Cancel cannot restart pairing
+PASS explicit Pair exits parked service state
+PASS pairing UI retains scanner readiness/retry status
+BOUNDARY: Android callback scan request and injected registered-callback packets; no physical BLE radio delivery, peripheral or CCCD response.

@@ -16,7 +16,7 @@ import android.content.pm.PackageManager;
 import android.os.*;
 import java.util.*;
 
-/** Zeekr Shortcut pairing order, serialized with scan delivery on the BLE worker. */
+/** v1.5.0 callback pairing on the main looper, retaining sleep recovery and diagnostics. */
 public final class SmartButtonsService extends Service {
     static final String PAIR="pair",CANCEL_PAIR="cancel_pair",STOP="stop",SYNC="sync";
     static volatile String status="未啟用靈動貼",scanStatus="尚未開始掃描",pairPhase="";
@@ -74,7 +74,7 @@ public final class SmartButtonsService extends Service {
         String action=i==null?SYNC:i.getAction();
         if(STOP.equals(action)){SmartButtonStore.prefs(this).edit().putBoolean("enabled",false).putBoolean("listening_session",false).apply();stopSelf();return START_NOT_STICKY;}
         if(!SmartButtonStore.prefs(this).getBoolean("enabled",false)||!permitted(this)){
-            status=permitted(this)?"未啟用靈動貼":"請先允許藍牙掃描及連接權限";ButtonScanner.stopOrphan(getApplicationContext());stopSelf();return START_NOT_STICKY;
+            status=permitted(this)?"未啟用靈動貼":"請先允許藍牙及位置權限";ButtonScanner.stopOrphan(getApplicationContext());stopSelf();return START_NOT_STICKY;
         }
         if("scan_result".equals(action)&&!SmartButtonStore.prefs(this).getBoolean("listening_session",false)){ButtonScanner.stopOrphan(this);stopSelf();return START_NOT_STICKY;}
         foreground();Intent scanIntent=i==null?null:i.getParcelableExtra("scan_result");

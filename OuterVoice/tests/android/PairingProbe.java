@@ -29,7 +29,7 @@ public final class PairingProbe extends Instrumentation {
     private void ui(Task task)throws Exception{Throwable[] e={null};runOnMainSync(()->{try{task.run();}catch(Throwable t){e[0]=t;}});if(e[0]!=null)throw new Exception(e[0]);}
     private void work(Task task)throws Exception{CountDownLatch done=new CountDownLatch(1);Throwable[] e={null};((Handler)field(scanner,"work")).post(()->{try{task.run();}catch(Throwable t){e[0]=t;}finally{done.countDown();}});if(!done.await(8,TimeUnit.SECONDS))throw new AssertionError("BLE worker timeout");if(e[0]!=null)throw new Exception(e[0]);}
     private void pair()throws Exception{ui(()->stat("SmartButtonsService","command",new Class<?>[]{Context.class,String.class},c,"pair"));Thread.sleep(900);scanner=sf("ButtonScanner","current");service=field(field(scanner,"listener"),"this$0");work(()->{});}
-    private Intent advertisement(int gesture,String name)throws Exception{
+    private ScanResult advertisement(int gesture,String name)throws Exception{
         byte[] label=name.getBytes("UTF-8"),raw=new byte[15+label.length];
         byte[] prefix={2,1,6,8,2,(byte)255,0,(byte)gesture,50,1,2,1};System.arraycopy(prefix,0,raw,0,12);
         raw[12]=(byte)(label.length+1);raw[13]=9;System.arraycopy(label,0,raw,14,label.length);
@@ -37,16 +37,11 @@ public final class PairingProbe extends Instrumentation {
         ScanRecord record=(ScanRecord)parse.invoke(null,(Object)raw);
         if(!name.equals(record.getDeviceName()))throw new AssertionError("invalid native scan fixture");
         BluetoothAdapter adapter=((BluetoothManager)c.getSystemService(Context.BLUETOOTH_SERVICE)).getAdapter();
-        ArrayList<ScanResult> results=new ArrayList<>();results.add(new ScanResult(adapter.getRemoteDevice(ADDRESS),record,-40,SystemClock.elapsedRealtimeNanos()));
-        return new Intent("com.zecadev.outervoice.SMART_BUTTON_SCAN").putParcelableArrayListExtra(BluetoothLeScanner.EXTRA_LIST_SCAN_RESULT,results);
+        return new ScanResult(adapter.getRemoteDevice(ADDRESS),record,-40,SystemClock.elapsedRealtimeNanos());
     }
-    private void deliver(Intent extra)throws Exception{
-        long before=(Long)field(scanner,"packets");
-        PendingIntent token=(PendingIntent)stat("ButtonScanner","token",new Class<?>[]{Context.class},c);token.send(c,0,extra);
-        long deadline=SystemClock.elapsedRealtime()+8000;
-        while((Long)field(scanner,"packets")==before&&SystemClock.elapsedRealtime()<deadline)Thread.sleep(50);
-        if((Long)field(scanner,"packets")==before)throw new AssertionError("PendingIntent delivery timeout; "+sf("SmartButtonsService","status"));
-        work(()->{});
+    private void deliver(ScanResult result)throws Exception{
+        ScanCallback callback=(ScanCallback)field(scanner,"callback");if(callback==null)throw new AssertionError("callback is not registered");
+        callback.onScanResult(ScanSettings.CALLBACK_TYPE_ALL_MATCHES,result);work(()->{});
     }
     private void frames(String name)throws Exception{
         final View[] button={null};ui(()->button[0]=(View)field(overlay(),"mic"));View b=button[0];Rect r=new Rect();ui(()->{int[] at=new int[2];b.getLocationOnScreen(at);r.set(at[0],at[1],at[0]+b.getWidth(),at[1]+b.getHeight());});
@@ -88,34 +83,42 @@ public final class PairingProbe extends Instrumentation {
     }
     @Override public void onCreate(Bundle b){super.onCreate(b);animation=b!=null&&"true".equals(b.getString("animation"));start();}
     @Override public void onStart(){new Thread(()->{Bundle result=new Bundle();try{
-        c=getTargetContext();dir=new File(c.getExternalFilesDir(null),"v161-qa");dir.mkdirs();
+        c=getTargetContext();dir=new File(c.getExternalFilesDir(null),"v162-qa");dir.mkdirs();
         for(String key:new String[]{"smart_buttons","floating","speaking"})backup.put(key,new HashMap<>(prefs(key).getAll()));
         if(animation){animation();}else{
         prefs("floating").edit().putBoolean("enabled",false).commit();
         prefs("smart_buttons").edit().clear().putBoolean("enabled",true).putBoolean("listening_session",true).putString("devices","[]").commit();
-        check(!((android.location.LocationManager)c.getSystemService(Context.LOCATION_SERVICE)).isLocationEnabled(),"location switch is OFF for this Android 13 discovery test");
+        check(((android.location.LocationManager)c.getSystemService(Context.LOCATION_SERVICE)).isLocationEnabled(),"location is ON as required by v1.5.0 target-28 compatibility");
+        check(c.checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION)==0,"v1.5.0 fine location permission is granted");
         check(c.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)!=0,"BLE pairing does not require microphone permission");
-        pair();check(scanner!=null,"foreground discovery starts with Nearby Devices permissions only");
-        Object loop=field(scanner,"loop");check((Boolean)field(loop,"scanning"),"real Android PendingIntent scan registration succeeds with location OFF");
+        pair();check(scanner!=null,"foreground callback discovery starts with v1.5.0 permission set");
+        Object loop=field(scanner,"loop");
+        long deadline=SystemClock.elapsedRealtime()+8000;while(field(scanner,"callback")==null&&SystemClock.elapsedRealtime()<deadline)Thread.sleep(50);work(()->{});
+        check((Boolean)field(loop,"scanning")&&field(scanner,"callback")!=null,"Android ScanCallback request starts with the v1.5.0 overload");
+        check(((Handler)field(scanner,"work")).getLooper()==Looper.getMainLooper(),"scan registration, delivery and GATT use the v1.5.0 main looper");
         int starts=((Collection<?>)field(loop,"starts")).size();pair();check(((Collection<?>)field(loop,"starts")).size()==starts,"reopening pairing preserves the healthy scanner registration");
         deliver(advertisement(0,"Other_button"));check(field(service,"link")==null,"unrelated advertisements cannot start GATT pairing");
-        deliver(advertisement(0,"ZEEKR_button"));check(((Long)sf("SmartButtonsService","buttonPackets"))==1,"mutable PendingIntent delivers named short-press advertisement through the manifest receiver");
+        deliver(advertisement(0,"ZEEKR_button"));check(((Long)sf("SmartButtonsService","buttonPackets"))==1,"registered ScanCallback delivers a named short-press advertisement");
         check(field(service,"link")==null&&sf("SmartButtonsService","status").toString().contains("長按"),"short press is detected and requests long press without binding");
-        // A receiver context's preferences may belong to a host wrapper; only application state decides delivery.
-        Context wrapped=new ContextWrapper(c){@Override public Context getApplicationContext(){return c.getApplicationContext();}@Override public SharedPreferences getSharedPreferences(String n,int mode){return c.getSharedPreferences("probe-unused-disabled",mode);}};
-        BroadcastReceiver receiver=(BroadcastReceiver)cls("ButtonScanReceiver").getConstructor().newInstance();ui(()->receiver.onReceive(wrapped,advertisement(0,"ZEEKR_button")));Thread.sleep(150);work(()->{});
-        check(((Long)sf("SmartButtonsService","buttonPackets"))==2,"receiver uses application state despite a different wrapper preference namespace");
+        ScanCallback active=(ScanCallback)field(scanner,"callback");
+        active.onBatchScanResults(Arrays.asList(advertisement(0,"ZEEKR_button"),advertisement(0,"ZEEKR_button")));work(()->{});
+        check(((Long)sf("SmartButtonsService","buttonPackets"))==3,"batched callback results follow the same discovery path");
+        long beforeLegacy=(Long)field(scanner,"packets");
+        BroadcastReceiver receiver=(BroadcastReceiver)cls("ButtonScanReceiver").getConstructor().newInstance();
+        ui(()->receiver.onReceive(c,new Intent("com.zecadev.outervoice.SMART_BUTTON_SCAN").putParcelableArrayListExtra(BluetoothLeScanner.EXTRA_LIST_SCAN_RESULT,new ArrayList<>(Arrays.asList(advertisement(1,"ZEEKR_button"))))));work(()->{});
+        check((Long)field(scanner,"packets")==beforeLegacy&&field(scanner,"callback")==active,"old PendingIntent broadcasts cannot feed or replace callback discovery");
         deliver(advertisement(1,"ZEEKR_button"));Object link=field(service,"link");check(link!=null,"long-press advertisement starts the production GATT connection path");
         check(field(link,"bt")==field(scanner,"work"),"GATT and scan operations share the same serialized BLE handler");
         check(!prefs("smart_buttons").getString("devices","").contains(ADDRESS),"discovery alone never saves a binding before notification subscription");
         deliver(advertisement(1,"ZEEKR_button"));check(field(service,"link")==link,"repeated long-press packets do not create duplicate GATT links");
-        work(()->call(loop,"failed",new Class<?>[]{int.class},2));check(sf("SmartButtonsService","status").toString().contains("掃描失敗 2"),"scanner failure remains visible during pairing");
+        active.onScanFailed(2);work(()->{});check(sf("SmartButtonsService","status").toString().contains("掃描失敗 2"),"scanner failure remains visible during pairing");
         ui(()->stat("SmartButtonsService","command",new Class<?>[]{Context.class,String.class},c,"cancel_pair"));Thread.sleep(300);work(()->{});
-        deliver(advertisement(1,"ZEEKR_button"));check(field(service,"link")==null,"late advertisements after Cancel cannot restart pairing");
+        long beforeLate=(Long)field(scanner,"packets");active.onScanResult(1,advertisement(1,"ZEEKR_button"));work(()->{});
+        check(field(service,"link")==null&&(Long)field(scanner,"packets")==beforeLate,"late callbacks after stop/Cancel cannot restart pairing");
         work(()->call(scanner,"park",new Class<?>[0]));pair();check(!(Boolean)field(service,"sleeping"),"explicit Pair exits parked service state");
         check(sf("SmartButtonsService","status").toString().contains("BLE" )||sf("SmartButtonsService","status").toString().contains("接收"),"pairing UI retains scanner readiness/retry status");
         c.stopService(new Intent().setClassName(c,"com.zecadev.outervoice.SmartButtonsService"));Thread.sleep(500);
-        report.append("BOUNDARY: actual Android registration and PendingIntent delivery; synthetic scan packets, no physical BLE peripheral/CCCD response.\n");
+        report.append("BOUNDARY: Android callback scan request and injected registered-callback packets; no physical BLE radio delivery, peripheral or CCCD response.\n");
         }
         result.putString("result","PASS");
     }catch(Throwable e){report.append("FAIL ").append(e).append('\n');StringWriter sw=new StringWriter();e.printStackTrace(new PrintWriter(sw));report.append(sw);result.putString("result","FAIL");}

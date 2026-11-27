@@ -45,7 +45,7 @@ final class SmartButtonsPage extends LinearLayout {
         TextView bt=button("系統藍牙"),location=button(Build.VERSION.SDK_INT>=31?"配對診斷":"位置服務"),permissions=button("權限");
         for (TextView b : new TextView[]{bt,location,permissions}) { b.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX,px(16)); system.addView(b,new LayoutParams(0,px(48),1)); }
         left.addView(system);
-        bt.setOnClickListener(v->open(Settings.ACTION_BLUETOOTH_SETTINGS)); location.setOnClickListener(v->{if(Build.VERSION.SDK_INT>=31){TextView details=label(SmartButtonsService.diagnostics(),15,WHITE,false);details.setTextIsSelectable(true);details.setPadding(px(16),px(8),px(16),px(8));ScrollView scroll=new ScrollView(activity);scroll.addView(details);new AlertDialog.Builder(activity).setTitle("靈動貼配對診斷").setView(scroll).setPositiveButton("關閉",null).show();}else open(Settings.ACTION_LOCATION_SOURCE_SETTINGS);});
+        bt.setOnClickListener(v->open(Settings.ACTION_BLUETOOTH_SETTINGS)); location.setOnClickListener(v->{if(Build.VERSION.SDK_INT>=31){TextView details=label(SmartButtonsService.diagnostics(),15,WHITE,false);details.setTextIsSelectable(true);details.setPadding(px(16),px(8),px(16),px(8));ScrollView scroll=new ScrollView(activity);scroll.addView(details);new AlertDialog.Builder(activity).setTitle("靈動貼配對診斷").setView(scroll).setNeutralButton("位置服務",(d,w)->open(Settings.ACTION_LOCATION_SOURCE_SETTINGS)).setPositiveButton("關閉",null).show();}else open(Settings.ACTION_LOCATION_SOURCE_SETTINGS);});
         permissions.setOnClickListener(v->{ try { a.startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,android.net.Uri.parse("package:"+a.getPackageName()))); } catch (RuntimeException e) { toast("無法開啟權限設定"); } });
         ScrollView scroll = new ScrollView(a); scroll.setFillViewport(true); addView(scroll,new LayoutParams(0,-1,1));
         devices=col(); scroll.addView(devices); refresh();
@@ -60,7 +60,7 @@ final class SmartButtonsPage extends LinearLayout {
     private void activate(String action){
         ArrayList<String> missing=new ArrayList<>();
         for(String p:SmartButtonPermissions.required(Build.VERSION.SDK_INT))if(activity.checkSelfPermission(p)!=PackageManager.PERMISSION_GRANTED)missing.add(p);
-        if(!missing.isEmpty()){activity.requestPermissions(missing.toArray(new String[0]),77);toast("允許權限後，請再按啟用或配對");return;}
+        if(!missing.isEmpty()){activity.requestPermissions(missing.toArray(new String[0]),77);toast("允許藍牙及位置權限後，請再按啟用或配對");return;}
         SmartButtonStore.prefs(activity).edit().putBoolean("enabled",true).apply();SmartButtonsService.command(activity,action);
     }
     private void refresh(){

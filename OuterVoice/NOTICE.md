@@ -1,4 +1,4 @@
-# Outer Voice 1.6.1 notices
+# Outer Voice 1.6.2 notices
 
 This is Outer Voice, a modified combined application, not the original Zeekr Shortcut and not an official Zeekr product.
 
@@ -10,7 +10,7 @@ The combined release is distributed under GPL-3.0-only with dts88's applicable G
 
 Original Outer Voice MIT notices are retained in `LICENSE-MIT.txt`. Font and other bundled asset notices remain under `app/src/main/assets`. The About/Credits page displays the required attribution and bundled license text.
 
-Corresponding source, assets, native tests and build scripts accompany the APK in `OuterVoice-1.6.1-source.zip`. Private signing keys/passwords are not included. A new builder supplies their own signing key, JDK and Android SDK; replacing an installed APK using its existing identity requires the original signing certificate.
+Corresponding source, assets, native tests and build scripts accompany the APK in `OuterVoice-1.6.2-source.zip`. Private signing keys/passwords are not included. A new builder supplies their own signing key, JDK and Android SDK; replacing an installed APK using its existing identity requires the original signing certificate.
 
 ## 1.5.1 changes, 2026-11-27
 
@@ -19,3 +19,7 @@ Corresponding source, assets, native tests and build scripts accompany the APK i
 ## 1.6.1 changes, 2026-11-27
 
 Rechecked the upstream button subsystem at `e64a4f6034460853e35b8789d2ab21aa12bfb8e1`; these upstream files match the previously pinned revision. Outer Voice adapts its API-specific scan permissions, application-context PendingIntent delivery, serialized scan/GATT thread and explicit-pairing wake behavior. Local diagnostics, tests and Live Speak overlay animation were added. Upstream headers and applicable GPL section 7 terms are retained.
+
+## 1.6.2 changes, 2026-11-27
+
+Restored the direct ScanCallback, main-looper and target-28 permission/location behavior from Outer Voice 1.5.0 (`01ca59e`), retaining later recovery and audio/UI fixes. The GATT/protocol implementation remains unchanged. Legacy PendingIntent delivery is retired; the receiver remains for cleanup only. Applicable upstream attribution and GPL section 7 terms remain.

@@ -67,8 +67,8 @@ public final class FixProbe extends Instrumentation {
             ui(()->call(voice,"cancel",new Class<?>[0]));Thread.sleep(300);toasts.set(0);
             for(int i=0;i<30;i++)ui(()->call(voice,"status",new Class<?>[]{String.class},"Ready to speak"));Thread.sleep(400);
             check(toasts.get()==0,"repeated idle/meter status updates produce no Toasts");
-            Object scanner=statField("ButtonScanner","current");check(scanner!=null,"PendingIntent BLE scanner is installed");Object loop=field(scanner,"loop");
-            check((Boolean)field(loop,"scanning"),"PendingIntent BLE registration succeeds on Android 13");
+            Object scanner=statField("ButtonScanner","current");check(scanner!=null,"callback BLE scanner is installed");Object loop=field(scanner,"loop");
+            check((Boolean)field(loop,"scanning"),"callback BLE registration succeeds on Android 13");
             worker(scanner,()->call(loop,"failed",new Class<?>[]{int.class},2));Thread.sleep(5900);
             check((Boolean)field(loop,"scanning"),"injected error2 cleans up and re-registers without restarting the app");
             worker(scanner,()->call(scanner,"park",new Class<?>[0]));Thread.sleep(400);check(!(Boolean)field(loop,"scanning"),"park releases BLE registration");

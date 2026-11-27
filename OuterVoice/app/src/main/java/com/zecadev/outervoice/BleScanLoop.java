@@ -29,7 +29,7 @@ final class BleScanLoop {
         if(now<at){host.status("BLE 正在恢復 · "+Math.max(1,(at-now+999)/1000)+" 秒後重試");schedule(at-now);return;}
         if(!radio.enabled()){host.status(radio.unavailable());schedule(5_000);return;}
         host.status("正在準備 BLE 掃描 · 清理上次登記");
-        // Always stop the stable PendingIntent, even after registration failure or process restart.
+        // Stop the previous callback and retire any legacy PendingIntent before re-registering.
         radio.stop();radio.repair();pending=true;int token=generation;
         host.later(()->{
             if(token!=generation)return;pending=false;if(!wanted||paused)return;

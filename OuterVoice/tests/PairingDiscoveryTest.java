@@ -8,10 +8,11 @@ public final class PairingDiscoveryTest {
     public static void main(String[] args){
         check(Arrays.equals(SmartButtonPermissions.required(30),new String[]{"android.permission.ACCESS_FINE_LOCATION"}),"older Android uses location permission");
         for(int api:new int[]{31,33,36}){
-            check(Arrays.equals(SmartButtonPermissions.required(api),new String[]{"android.permission.BLUETOOTH_SCAN","android.permission.BLUETOOTH_CONNECT"}),"Nearby only on Android "+api);
-            check(!SmartButtonPermissions.locationSwitchRequired(api),"no app-level GPS gate on Android "+api);
+            check(Arrays.equals(SmartButtonPermissions.required(api),new String[]{"android.permission.ACCESS_FINE_LOCATION","android.permission.BLUETOOTH_SCAN","android.permission.BLUETOOTH_CONNECT"}),"v1.5.0 permissions on Android "+api);
+            check(SmartButtonPermissions.locationSwitchRequired(api,28),"v1.5.0 target-28 location compatibility on Android "+api);
         }
-        check(SmartButtonPermissions.locationSwitchRequired(30),"legacy location gate retained");
+        check(SmartButtonPermissions.locationSwitchRequired(30,28),"legacy location gate retained");
+        check(!SmartButtonPermissions.locationSwitchRequired(33,33),"future modern-target location split");
         RecoveryPolicyTest.Clock c=new RecoveryPolicyTest.Clock();RecoveryPolicyTest.Radio r=new RecoveryPolicyTest.Radio(c);BleScanLoop loop=new BleScanLoop(c,r);
         loop.wanted(true);c.advance(500);int first=r.started;
         loop.binding(true);c.advance(1000);check(loop.scanning&&r.started==first,"pairing preserves a healthy scan registration");

@@ -1,0 +1,26 @@
+s_glBindAttribLocation: bind attrib 0 name position
+s_glBindAttribLocation: bind attrib 1 name color
+s_glBindAttribLocation: bind attrib 2 name localCoord
+PASS smart single press starts recording and remains recording after click
+PASS smart record action preserves independent screen Live Speak mode
+PASS changing screen mode through native picker does not cancel a remote recording
+PASS remote recording survives activity pause and Home
+PASS second smart single press stops recording
+PASS external gain persists at +24 dB
+PASS assigned double sound reaches strict exterior playback and fails closed without BUS12
+PASS deleted assigned sound is reported without choosing another sound
+PASS smart Live Speak action preserves screen hold mode
+PASS unassigned double press is a no-op during recording
+PASS disabled smart buttons cannot stop or trigger audio
+PASS assigned stop audio action cancels recording
+PASS hold down starts capture
+PASS hold release stops and schedules playback
+PASS screen toggle starts capture
+PASS screen toggle stops capture on second click
+PASS native single-action picker saves independently of screen mode
+PASS native rename input accepts a new name
+PASS native rename persists per device
+PASS native double-press picker saves the selected sound ID
+PASS native gain slider saves +12 dB
+PASS native gain slider saves +24 dB
+BOUNDARY: BLE pairing/radio, BUS12 acoustics and live latency require target-car verification.

@@ -2,13 +2,13 @@
 
 Native Android app for a 1024 × 600 landscape vehicle head unit. Developer: Zeca. Tester credit: SL. Contributors: Chris and j.Lun.
 
-[Download v1.6.1 APK](OuterVoice/dist/OuterVoice-1.6.1.apk) · [Corresponding source ZIP](OuterVoice/dist/OuterVoice-1.6.1-source.zip) · [Release notes](OuterVoice/release-notes-v1.6.1.md) · [App documentation](OuterVoice/README.md) · [Validation](OuterVoice/validation-v1.6.1.md)
+[Download v1.6.2 APK](OuterVoice/dist/OuterVoice-1.6.2.apk) · [Corresponding source ZIP](OuterVoice/dist/OuterVoice-1.6.2-source.zip) · [Release notes](OuterVoice/release-notes-v1.6.2.md) · [App documentation](OuterVoice/README.md) · [Validation](OuterVoice/validation-v1.6.2.md)
 
-Android 9/API 28 or later; package `com.zecadev.outervoice`; version **1.6.1 (build 15)**. The APK uses the retained signing certificate. Install it over the existing app to preserve saved sounds and settings.
+Android 9/API 28 or later; package `com.zecadev.outervoice`; version **1.6.2 (build 16)**. The APK uses the retained signing certificate. Install it over the existing app to preserve saved sounds and settings.
 
-## What's new in v1.6.1
+## What's new in v1.6.2
 
-Smart-button discovery now follows the reference app's Android 12+ Nearby Devices permission split, application-context PendingIntent delivery and shared scan/GATT worker. Explicit pairing preserves a healthy scan and leaves parked/wake-settlement state. Scanner readiness, packet counts and 配對診斷 show the actual pairing stage. Floating Live Speak now pulses red in both expanded and minimized layouts. See the release notes for car-test steps and verification limits.
+Smart-button discovery returns to the car-tested 1.5.0 direct ScanCallback API and main-looper pairing path, including its target-28 location permission/services requirements. GATT code is unchanged from 1.5.0. Later recovery, diagnostics, independent actions and floating Live Speak animation remain. See release notes for installation and vehicle-test limits.
 
 All configuration remains under **設定** with independent on-screen and physical-button actions.
 
@@ -54,13 +54,13 @@ The built-in browser requires file-access permission and can show storage readab
 
 ## Validation and hardware status
 
-v1.6.1 retains strict BUS12 routing. Completed checks and verification boundaries are recorded in [v1.6.1 validation](OuterVoice/validation-v1.6.1.md), with the [native regression report](OuterVoice/qa/v161-native/summary.txt). Earlier checks remain in the [historical validation log](OuterVoice/validation.md).
+v1.6.2 retains strict BUS12 routing. Completed checks and verification boundaries are recorded in [v1.6.2 validation](OuterVoice/validation-v1.6.2.md), with the [native regression report](OuterVoice/qa/v162-native/summary.txt). Earlier checks remain in the [historical validation log](OuterVoice/validation.md).
 
 Audible external-speaker output, microphone quality, external-storage access and firmware-specific overlay behavior still require the actual head unit.
 
 ## Proposed enhancements
 
-These are discussion proposals, not features included in v1.6.1 or commitments to a release date. Suggested first priorities are backup/restore, a floating Stop control and saved panel profiles.
+These are discussion proposals, not features included in v1.6.2 or commitments to a release date. Suggested first priorities are backup/restore, a floating Stop control and saved panel profiles.
 
 | Proposal | Intended behavior |
 |---|---|
@@ -76,6 +76,6 @@ These are discussion proposals, not features included in v1.6.1 or commitments t
 
 The application and build script are in [OuterVoice](OuterVoice/README.md). Build with the documented local Java/Android toolchain; portable tool downloads and private signing material are excluded from Git. The retained signing key is required to produce compatible future updates.
 
-The combined v1.6.1 release is GPL-3.0-only with the applicable upstream GPL section 7 terms. Based on Zeekr Shortcut by dts88 (https://github.com/dts88/zeekr-shortcut-car), pinned at `5d9d8a872e459aed49d657a94c55eaeafbf5155d`. This is a modified Outer Voice application, not the original Zeekr Shortcut.
+The combined v1.6.2 release is GPL-3.0-only with the applicable upstream GPL section 7 terms. Based on Zeekr Shortcut by dts88 (https://github.com/dts88/zeekr-shortcut-car), pinned at `5d9d8a872e459aed49d657a94c55eaeafbf5155d`. This is a modified Outer Voice application, not the original Zeekr Shortcut.
 
 See [notices](OuterVoice/NOTICE.md), [upstream terms](OuterVoice/UPSTREAM-NOTICE.md) and [GPL-3.0](LICENSE). Original [repository MIT notices](LICENSE-MIT.txt), [Outer Voice MIT notices](OuterVoice/LICENSE-MIT.txt), Material Icons and Inter font licenses are retained. Private signing material is excluded from Git and the corresponding source archive.
