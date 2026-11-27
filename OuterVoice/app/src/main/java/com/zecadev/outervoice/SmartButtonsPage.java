@@ -22,28 +22,30 @@ final class SmartButtonsPage extends LinearLayout {
     private final Handler main = new Handler();
     private final Typeface font;
     private final LinearLayout devices;
-    private final TextView state, audioState, enable, pair;
+    private final TextView state, audioState, enable, pair, method;
     private String signature = "";
     private final Runnable tick = new Runnable() { public void run() { refresh(); main.postDelayed(this, 500); } };
     SmartButtonsPage(Activity a) {
         super(a); activity = a; scale = Math.min(a.getResources().getDisplayMetrics().widthPixels/1024f, a.getResources().getDisplayMetrics().heightPixels/600f);
         font = Typeface.createFromAsset(a.getAssets(), "Inter.ttf"); setOrientation(HORIZONTAL); setPadding(px(24),px(18),px(24),px(20));
         LinearLayout left = col(); left.setPadding(0,0,px(24),0); addView(left, new LayoutParams(px(356),-1));
-        left.addView(label("Zeekr 靈動貼",26,WHITE,true),new LayoutParams(-1,px(44)));
-        left.addView(label("獨立設定單擊及雙擊動作\n不會改變畫面或懸浮按鈕的收音模式",17,MUTED,false),new LayoutParams(-1,px(68)));
-        enable = button(""); left.addView(enable,new LayoutParams(-1,px(52)));
+        left.addView(label("Zeekr 靈動貼",26,WHITE,true),new LayoutParams(-1,px(36)));
+        left.addView(label("獨立設定單擊及雙擊動作\n不會改變畫面或懸浮按鈕的收音模式",15,MUTED,false),new LayoutParams(-1,px(44)));
+        method=button("");method.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX,px(16));left.addView(method,new LayoutParams(-1,px(52)));
+        method.setOnClickListener(v->chooseMethod());space(left,8);
+        enable = button(""); left.addView(enable,new LayoutParams(-1,px(44)));
         enable.setOnClickListener(v -> {
             if (SmartButtonStore.prefs(a).getBoolean("enabled",false)) { SmartButtonStore.prefs(a).edit().putBoolean("enabled",false).apply(); SmartButtonsService.command(a,SmartButtonsService.STOP); }
             else activate(SmartButtonsService.SYNC);
             refresh();
         });
-        space(left,10); pair = button("＋ 配對靈動貼"); left.addView(pair,new LayoutParams(-1,px(52)));
+        space(left,8); pair = button("＋ 配對靈動貼"); left.addView(pair,new LayoutParams(-1,px(48)));
         pair.setOnClickListener(v -> { if (SmartButtonsService.pairing) SmartButtonsService.command(a,SmartButtonsService.CANCEL_PAIR); else activate(SmartButtonsService.PAIR); refresh(); });
-        space(left,12); state = label("",17,TEAL,false); left.addView(state,new LayoutParams(-1,px(92)));
-        audioState = label("",16,MUTED,false); left.addView(audioState,new LayoutParams(-1,px(50)));
+        space(left,10); state = label("",17,TEAL,false); left.addView(state,new LayoutParams(-1,px(80)));
+        audioState = label("",16,MUTED,false); left.addView(audioState,new LayoutParams(-1,px(32)));
         LinearLayout system = new LinearLayout(a);
         TextView bt=button("系統藍牙"),location=button(Build.VERSION.SDK_INT>=31?"配對診斷":"位置服務"),permissions=button("權限");
-        for (TextView b : new TextView[]{bt,location,permissions}) { b.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX,px(16)); system.addView(b,new LayoutParams(0,px(48),1)); }
+        for (TextView b : new TextView[]{bt,location,permissions}) { b.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX,px(16)); system.addView(b,new LayoutParams(0,px(44),1)); }
         left.addView(system);
         bt.setOnClickListener(v->open(Settings.ACTION_BLUETOOTH_SETTINGS)); location.setOnClickListener(v->{if(Build.VERSION.SDK_INT>=31){TextView details=label(SmartButtonsService.diagnostics(),15,WHITE,false);details.setTextIsSelectable(true);details.setPadding(px(16),px(8),px(16),px(8));ScrollView scroll=new ScrollView(activity);scroll.addView(details);new AlertDialog.Builder(activity).setTitle("靈動貼配對診斷").setView(scroll).setNeutralButton("位置服務",(d,w)->open(Settings.ACTION_LOCATION_SOURCE_SETTINGS)).setPositiveButton("關閉",null).show();}else open(Settings.ACTION_LOCATION_SOURCE_SETTINGS);});
         permissions.setOnClickListener(v->{ try { a.startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,android.net.Uri.parse("package:"+a.getPackageName()))); } catch (RuntimeException e) { toast("無法開啟權限設定"); } });
@@ -57,14 +59,27 @@ final class SmartButtonsPage extends LinearLayout {
     private TextView button(String s){TextView v=label(s,18,WHITE,true);v.setGravity(Gravity.CENTER);v.setPadding(px(12),0,px(12),0);GradientDrawable d=new GradientDrawable();d.setColor(0xff182329);d.setCornerRadius(px(10));d.setStroke(px(1),LINE);v.setBackground(d);v.setClickable(true);v.setFocusable(true);return v;}
     private void toast(String s){Toast.makeText(activity,s,Toast.LENGTH_LONG).show();}
     private void open(String action){try{activity.startActivity(new Intent(action));}catch(RuntimeException e){toast("此車機未提供這個系統設定頁");}}
+    private void chooseMethod(){
+        String[] choices={"Zeekr Shortcut 方式\n系統廣播接收 · 適合背景按鍵", "v1.5.0 相容方式\n直接接收 · 已有實車成功記錄"};
+        new AlertDialog.Builder(activity).setTitle("靈動貼配對方式")
+            .setSingleChoiceItems(choices,PairingMethod.background(PairingMethod.get(activity))?0:1,(d,w)->{
+                String selected=w==0?PairingMethod.SHORTCUT:PairingMethod.CALLBACK;
+                boolean changed=!selected.equals(PairingMethod.get(activity));PairingMethod.select(activity,selected);
+                if(changed){
+                    SmartButtonsController.install(activity).action(SmartButtonsService.CHANGE_METHOD);
+                }
+                d.dismiss();refresh();
+            }).setNegativeButton("取消",null).show();
+    }
     private void activate(String action){
         ArrayList<String> missing=new ArrayList<>();
-        for(String p:SmartButtonPermissions.required(Build.VERSION.SDK_INT))if(activity.checkSelfPermission(p)!=PackageManager.PERMISSION_GRANTED)missing.add(p);
-        if(!missing.isEmpty()){activity.requestPermissions(missing.toArray(new String[0]),77);toast("允許藍牙及位置權限後，請再按啟用或配對");return;}
+        for(String p:SmartButtonPermissions.required(Build.VERSION.SDK_INT,PairingMethod.get(activity)))if(activity.checkSelfPermission(p)!=PackageManager.PERMISSION_GRANTED)missing.add(p);
+        if(!missing.isEmpty()){activity.requestPermissions(missing.toArray(new String[0]),77);toast("允許"+SmartButtonPermissions.words(activity)+"權限後，請再按啟用或配對");return;}
         SmartButtonStore.prefs(activity).edit().putBoolean("enabled",true).apply();SmartButtonsService.command(activity,action);
     }
     private void refresh(){
         boolean on=SmartButtonStore.prefs(activity).getBoolean("enabled",false);
+        method.setText("配對方式："+PairingMethod.label(PairingMethod.get(activity))+"  ▾");
         enable.setText(on?"已啟用 · 點按停止接收":"啟用靈動貼");enable.setTextColor(on?TEAL:WHITE);
         pair.setText(SmartButtonsService.pairing?"取消配對":"＋ 配對靈動貼");
         state.setText(SmartButtonsService.status);audioState.setText(SmartButtonsService.pairing?"廣播 "+SmartButtonsService.packets+" · 靈動貼 "+SmartButtonsService.buttonPackets+" · 長按 "+SmartButtonsService.longPresses:VoiceSession.get(activity).message);

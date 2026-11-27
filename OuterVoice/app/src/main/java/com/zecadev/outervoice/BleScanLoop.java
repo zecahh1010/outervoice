@@ -7,11 +7,12 @@ final class BleScanLoop {
     interface Host { long now(); void later(Runnable r,long ms); void status(String text); }
     interface Radio { boolean enabled(); void stop(); void repair(); int start(); default String unavailable(){return "藍牙未就緒 · 等待系統藍牙服務";} }
     private final Host host; private final Radio radio;
-    private final ArrayDeque<Long> starts=new ArrayDeque<>();
+    private final ArrayDeque<Long> starts;
     private int generation, failures; private long settledAt, retryAt;
     private boolean wanted, paused, pending, binding;
     volatile boolean scanning;
-    BleScanLoop(Host h,Radio r){host=h;radio=r;}
+    BleScanLoop(Host h,Radio r){this(h,r,new ArrayDeque<>());}
+    BleScanLoop(Host h,Radio r,ArrayDeque<Long> sharedStarts){host=h;radio=r;starts=sharedStarts;}
     void wanted(boolean on){wanted=on;if(!on)stop();else ensure();}
     void pause(boolean on){paused=on;if(on)stop();else ensure();}
     void recover(long settle){stop();settledAt=host.now()+settle;retryAt=0;ensure();}
@@ -36,7 +37,7 @@ final class BleScanLoop {
             if(!radio.enabled()){schedule(5_000);return;}
             starts.addLast(host.now());int result=radio.start();
             if(result!=0){failed(result);return;}scanning=true;failures=0;
-            host.status("正在接收靈動貼按鍵 · 待機時接收廣播");watch(token);
+            host.status("掃描請求已接受 · 等待靈動貼廣播");watch(token);
             host.later(()->{if(token==generation&&scanning)recover(500);},25*60_000L);
         },500);
     }

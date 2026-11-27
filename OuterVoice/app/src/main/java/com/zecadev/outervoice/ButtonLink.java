@@ -65,6 +65,7 @@ final class ButtonLink {
 
     /** 给 {@code SmartButtons} 的（都在 bt 线程上）。 */
     interface Listener {
+        default void progress(ButtonLink link,String stage){}
         /** 第 {@code n} 次开始连（连之前）。 */
         void attempt(ButtonLink link, int n);
 
@@ -409,7 +410,7 @@ final class ButtonLink {
             close("no 0x2A60: not a smart button");
             return;
         }
-        BluetoothGattCharacteristic ch = notifyCh;
+        BluetoothGattCharacteristic ch = notifyCh;listener.progress(this,"已找到按鍵服務 · 正在訂閱通知");
         enqueue(new Op(LABEL_SUBSCRIBE, Op.DESCRIPTOR, kind.subscribeDelayMs, () -> subscribe(ch)));
     }
 
@@ -468,7 +469,7 @@ final class ButtonLink {
                     return;
                 }
                 if (newState == BluetoothProfile.STATE_CONNECTED) {
-                    connected = true;
+                    connected = true;listener.progress(ButtonLink.this,"GATT 已連線 · 正在讀取按鍵服務");
                     everConnected = true;
                     bt.postDelayed(() -> {
                         if (gatt == g && !ready && !closed) {

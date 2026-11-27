@@ -1,0 +1,8 @@
+PASS cold test has an active Android PendingIntent scan and saved virtual button
+PASS killed only the test app process in emulator-5556
+PASS app remains absent before virtual button transmission
+PASS real BLE system broadcast revives a new app process without launching UI
+PASS bound single press starts foreground action service after cold revival
+PASS Android attributes process startup to the manifest scan receiver
+PASS original emulator button preferences restored
+BOUNDARY: isolated Android emulator and virtual radio; not Zeekr/VLite firmware.

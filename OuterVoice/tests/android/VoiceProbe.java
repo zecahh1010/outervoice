@@ -105,7 +105,7 @@ public final class VoiceProbe extends Instrumentation {
             result.putString("stream",report.toString());result.putString("result","PASS");
         }catch(Throwable error){report.append("FAIL ").append(error).append('\n');StringWriter sw=new StringWriter();error.printStackTrace(new PrintWriter(sw));report.append(sw);result.putString("stream",report.toString());result.putString("result","FAIL");}
         finally{
-            try{cancel();c.stopService(new Intent().setClassName(c,"com.zecadev.outervoice.FloatingPanelService"));c.stopService(new Intent().setClassName(c,"com.zecadev.outervoice.SmartButtonsService"));
+            try{cancel();c.stopService(new Intent().setClassName(c,"com.zecadev.outervoice.FloatingPanelService"));stat("SmartButtonsService","command",new Class<?>[]{Context.class,String.class},c,"stop");
                 for(String name:original.keySet()){SharedPreferences.Editor e=prefs(name).edit().clear();for(Map.Entry<String,?> item:original.get(name).entrySet()){Object v=item.getValue();if(v instanceof String)e.putString(item.getKey(),(String)v);else if(v instanceof Integer)e.putInt(item.getKey(),(Integer)v);else if(v instanceof Boolean)e.putBoolean(item.getKey(),(Boolean)v);else if(v instanceof Long)e.putLong(item.getKey(),(Long)v);else if(v instanceof Float)e.putFloat(item.getKey(),(Float)v);}e.commit();}
                 if(fixture!=null)fixture.delete();try(FileOutputStream out=new FileOutputStream(new File(directory,"v150-probe.txt"))){out.write(report.toString().getBytes("UTF-8"));}
             }catch(Throwable ignored){}

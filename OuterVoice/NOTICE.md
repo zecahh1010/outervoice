@@ -1,4 +1,4 @@
-# Outer Voice 1.6.2 notices
+# Outer Voice 1.6.3 notices
 
 This is Outer Voice, a modified combined application, not the original Zeekr Shortcut and not an official Zeekr product.
 
@@ -10,7 +10,7 @@ The combined release is distributed under GPL-3.0-only with dts88's applicable G
 
 Original Outer Voice MIT notices are retained in `LICENSE-MIT.txt`. Font and other bundled asset notices remain under `app/src/main/assets`. The About/Credits page displays the required attribution and bundled license text.
 
-Corresponding source, assets, native tests and build scripts accompany the APK in `OuterVoice-1.6.2-source.zip`. Private signing keys/passwords are not included. A new builder supplies their own signing key, JDK and Android SDK; replacing an installed APK using its existing identity requires the original signing certificate.
+Corresponding source, assets, native tests and build scripts accompany the APK in `OuterVoice-1.6.3-source.zip`. Private signing keys/passwords are not included. A new builder supplies their own signing key, JDK and Android SDK; replacing an installed APK using its existing identity requires the original signing certificate.
 
 ## 1.5.1 changes, 2026-11-27
 
@@ -23,3 +23,7 @@ Rechecked the upstream button subsystem at `e64a4f6034460853e35b8789d2ab21aa12bf
 ## 1.6.2 changes, 2026-11-27
 
 Restored the direct ScanCallback, main-looper and target-28 permission/location behavior from Outer Voice 1.5.0 (`01ca59e`), retaining later recovery and audio/UI fixes. The GATT/protocol implementation remains unchanged. Legacy PendingIntent delivery is retired; the receiver remains for cleanup only. Applicable upstream attribution and GPL section 7 terms remain.
+
+## 1.6.3 changes, 2026-11-27
+
+Compared initialization, receivers, scan lifecycle, permissions, filters and GATT order with upstream commit ddf1b97e300aac203a3f2bf719e5b1e4381cac83. The upstream button subsystem matches the previously pinned revision. Added selectable transports, process-owned initialization/controller, receiver-main decoding, lifecycle guards and diagnostics. ButtonLink retains the upstream GATT implementation with progress callbacks added for diagnostics. Application/service/controller/receiver and scanner are modified Outer Voice adaptations, not the original Zeekr Shortcut. Existing upstream copyrights and applicable GPL section 7 terms are retained. The QA radio fixture uses Bumble as a test dependency; it is not bundled in the APK.

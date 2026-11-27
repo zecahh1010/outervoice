@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.zecadev.outervoice" android:versionCode="16" android:versionName="1.6.2">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.zecadev.outervoice" android:versionCode="17" android:versionName="1.6.3">
     <uses-sdk android:minSdkVersion="28" android:targetSdkVersion="28" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
@@ -15,7 +15,7 @@
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
-    <application android:allowBackup="false" android:label="Outer Voice" android:icon="@mipmap/ic_launcher" android:theme="@android:style/Theme.Material.NoActionBar" android:supportsRtl="true">
+    <application android:name=".OuterVoiceApplication" android:allowBackup="false" android:label="Outer Voice" android:icon="@mipmap/ic_launcher" android:theme="@android:style/Theme.Material.NoActionBar" android:supportsRtl="true">
         <receiver android:name=".ButtonScanReceiver" android:exported="false" />
         <service android:name=".SmartButtonsService" android:exported="false" android:foregroundServiceType="microphone|mediaPlayback" />
         <service android:name=".FloatingPanelService" android:exported="false" android:foregroundServiceType="microphone|mediaPlayback" />

@@ -83,11 +83,11 @@ public final class PairingProbe extends Instrumentation {
     }
     @Override public void onCreate(Bundle b){super.onCreate(b);animation=b!=null&&"true".equals(b.getString("animation"));start();}
     @Override public void onStart(){new Thread(()->{Bundle result=new Bundle();try{
-        c=getTargetContext();dir=new File(c.getExternalFilesDir(null),"v162-qa");dir.mkdirs();
+        c=getTargetContext();dir=new File(c.getExternalFilesDir(null),"v163-qa");dir.mkdirs();
         for(String key:new String[]{"smart_buttons","floating","speaking"})backup.put(key,new HashMap<>(prefs(key).getAll()));
         if(animation){animation();}else{
         prefs("floating").edit().putBoolean("enabled",false).commit();
-        prefs("smart_buttons").edit().clear().putBoolean("enabled",true).putBoolean("listening_session",true).putString("devices","[]").commit();
+        prefs("smart_buttons").edit().clear().putString("pairing_method","callback").putBoolean("enabled",true).putBoolean("listening_session",true).putString("devices","[]").commit();
         check(((android.location.LocationManager)c.getSystemService(Context.LOCATION_SERVICE)).isLocationEnabled(),"location is ON as required by v1.5.0 target-28 compatibility");
         check(c.checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION)==0,"v1.5.0 fine location permission is granted");
         check(c.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)!=0,"BLE pairing does not require microphone permission");
@@ -116,12 +116,12 @@ public final class PairingProbe extends Instrumentation {
         long beforeLate=(Long)field(scanner,"packets");active.onScanResult(1,advertisement(1,"ZEEKR_button"));work(()->{});
         check(field(service,"link")==null&&(Long)field(scanner,"packets")==beforeLate,"late callbacks after stop/Cancel cannot restart pairing");
         work(()->call(scanner,"park",new Class<?>[0]));pair();check(!(Boolean)field(service,"sleeping"),"explicit Pair exits parked service state");
-        check(sf("SmartButtonsService","status").toString().contains("BLE" )||sf("SmartButtonsService","status").toString().contains("接收"),"pairing UI retains scanner readiness/retry status");
-        c.stopService(new Intent().setClassName(c,"com.zecadev.outervoice.SmartButtonsService"));Thread.sleep(500);
+        check(sf("SmartButtonsService","status").toString().contains("掃描")||sf("SmartButtonsService","status").toString().contains("BLE" )||sf("SmartButtonsService","status").toString().contains("接收"),"pairing UI retains scanner readiness/retry status");
+        stat("SmartButtonsService","command",new Class<?>[]{Context.class,String.class},c,"stop");Thread.sleep(500);
         report.append("BOUNDARY: Android callback scan request and injected registered-callback packets; no physical BLE radio delivery, peripheral or CCCD response.\n");
         }
         result.putString("result","PASS");
     }catch(Throwable e){report.append("FAIL ").append(e).append('\n');StringWriter sw=new StringWriter();e.printStackTrace(new PrintWriter(sw));report.append(sw);result.putString("result","FAIL");}
-    finally{try{if(voice!=null)ui(()->call(voice,"cancel",new Class<?>[0]));if(c!=null){c.stopService(new Intent().setClassName(c,"com.zecadev.outervoice.SmartButtonsService"));c.stopService(new Intent().setClassName(c,"com.zecadev.outervoice.FloatingPanelService"));Thread.sleep(300);for(String key:backup.keySet())restore(key);}if(dir!=null)try(FileOutputStream out=new FileOutputStream(new File(dir,animation?"animation-report.txt":"pairing-report.txt"))){out.write(report.toString().getBytes("UTF-8"));}}catch(Exception e){report.append("cleanup ").append(e);}result.putString("report",report.toString());finish("PASS".equals(result.getString("result"))?Activity.RESULT_OK:Activity.RESULT_CANCELED,result);}
+    finally{try{if(voice!=null)ui(()->call(voice,"cancel",new Class<?>[0]));if(c!=null){stat("SmartButtonsService","command",new Class<?>[]{Context.class,String.class},c,"stop");c.stopService(new Intent().setClassName(c,"com.zecadev.outervoice.FloatingPanelService"));Thread.sleep(300);for(String key:backup.keySet())restore(key);}if(dir!=null)try(FileOutputStream out=new FileOutputStream(new File(dir,animation?"animation-report.txt":"pairing-report.txt"))){out.write(report.toString().getBytes("UTF-8"));}}catch(Exception e){report.append("cleanup ").append(e);}result.putString("report",report.toString());finish("PASS".equals(result.getString("result"))?Activity.RESULT_OK:Activity.RESULT_CANCELED,result);}
     },"pairing-probe").start();}
 }

@@ -1,0 +1,29 @@
+PASS native method picker saves shortcut
+PASS shortcut uses its expected location permission policy
+DETAIL shortcut pair_ms=939
+PASS shortcut completes actual Android GATT/CCCD subscription
+PASS shortcut receives real virtual-radio long-press advertisement
+PASS shortcut uses its expected delivery looper
+PASS system PendingIntent Bundle decoded on receiver/main looper
+PASS actual OS BLE PendingIntent results reach controller
+PASS shortcut BLE runtime survives foreground-service destruction
+PASS shortcut notification restarts foreground service and starts recording
+PASS shortcut second single notification stops recording
+PASS shortcut remote actions preserve independent screen speaking mode
+PASS shortcut real double notification is dispatched
+PASS native method picker saves callback
+PASS callback uses its expected location permission policy
+PASS switching transport preserves saved binding
+PASS switching transport preserves controller-owned recording
+PASS old native scan stops completely before new transport installs
+DETAIL callback pair_ms=758
+PASS callback completes actual Android GATT/CCCD subscription
+PASS callback receives real virtual-radio long-press advertisement
+PASS callback uses its expected delivery looper
+PASS actual OS ScanCallback results reach controller
+PASS callback BLE runtime survives foreground-service destruction
+PASS callback notification restarts foreground service and starts recording
+PASS callback second single notification stops recording
+PASS callback remote actions preserve independent screen speaking mode
+PASS callback real double notification is dispatched
+BOUNDARY: actual Android Bluetooth stack and a virtual netsim/Bumble peripheral, not physical Zeekr/VLite firmware.

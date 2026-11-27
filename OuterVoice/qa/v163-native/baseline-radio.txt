@@ -1,0 +1,5 @@
+DETAIL baseline pair_ms=1346
+PASS baseline completes actual Android GATT/CCCD subscription
+PASS baseline receives real virtual-radio long-press advertisement
+PASS 1.6.1 service destruction also destroys BLE listener
+BOUNDARY: actual Android Bluetooth stack and a virtual netsim/Bumble peripheral, not physical Zeekr/VLite firmware.

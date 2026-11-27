@@ -1,0 +1,20 @@
+Outer Voice 1.6.3 (build 17), Android 13/API 33, 1024x600
+
+PASS dual-radio.txt: 26 checks
+PASS cold-radio.txt: 7 checks
+PASS pairing-report.txt: 20 checks
+PASS VoiceProbe.txt: 22 checks
+PASS SettingsProbe.txt: 24 checks
+PASS FixProbe.txt: 19 checks
+PASS animation-report.txt: 10 checks
+TOTAL: 128 release checks
+
+All reports were rerun on the final signed APK after adding the shared cross-transport scan-start budget. JVM WAV/import/protocol/gain, recovery, mode-specific permissions and cross-transport throttling checks also pass. The original signed 1.6.1 control separately passes three virtual-radio/lifetime assertions (baseline-radio.txt).
+
+Real-radio tests use a Bumble 0.0.236 peripheral through an isolated netsim instance. Both native backend requests, real Android scan delivery, actual GATT/CCCD and real characteristic single/double notifications were exercised. A background normal app process was killed in the emulator, then actual BLE revived it without opening UI; Android logged startup for ButtonScanReceiver. Audio actions ensure the foreground service is ready. Switches retain binding/recording and complete native stop before installing the new transport.
+
+Existing fault/recording/Settings/Live animation probes complement the radio tests. Receiver loopback probes never count as peripheral input. No fallback BUS12 route or production test endpoint was added. The signing certificate remains 664b72c9d4c6075814ffa1c9b72a2d0c78132238fbed9d6b2265b78a7614a17e.
+
+BOUNDARY: virtual radio and native Android are not physical Zeekr/VLite validation. The exact historical car failure cannot be uniquely established without its original receiver trace. Confirmed integration differences and test evidence are in pairing-investigation-v1.6.3.md.
+
+Native pairing page, both method choices and diagnostics were visually checked. An unrelated emulator System UI startup ANR was dismissed before the successful runs; no Outer Voice AndroidRuntime crash was observed.
